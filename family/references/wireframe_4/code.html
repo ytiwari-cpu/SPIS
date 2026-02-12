@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Citizen Dashboard: Benefits Received</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#0f2cbd",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#101322",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen">
+<div class="relative flex h-auto min-h-screen w-full flex-col bg-background-light dark:bg-background-dark overflow-x-hidden">
+<!-- TopAppBar -->
+<header class="flex items-center bg-white dark:bg-slate-900 p-4 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-20">
+<div class="text-slate-900 dark:text-white flex size-10 shrink-0 items-center justify-center">
+<span class="material-symbols-outlined">menu</span>
+</div>
+<h1 class="text-slate-900 dark:text-white text-lg font-bold leading-tight tracking-tight flex-1 ml-4">Benefits Received</h1>
+<div class="flex w-10 items-center justify-end">
+<button class="flex cursor-pointer items-center justify-center rounded-lg h-10 w-10 bg-transparent text-slate-900 dark:text-white">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+</div>
+</header>
+<main class="flex-1 flex flex-col p-4 space-y-6">
+<!-- Summary Stats -->
+<div class="grid grid-cols-2 gap-4">
+<div class="flex flex-col gap-2 rounded-xl p-5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+<p class="text-slate-500 dark:text-slate-400 text-sm font-medium">Total Cash</p>
+<p class="text-slate-900 dark:text-white text-2xl font-bold">$4,250</p>
+</div>
+<div class="flex flex-col gap-2 rounded-xl p-5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+<p class="text-slate-500 dark:text-slate-400 text-sm font-medium">Pending</p>
+<p class="text-slate-900 dark:text-white text-2xl font-bold">1 Item</p>
+</div>
+</div>
+<!-- Benefits List Container -->
+<div class="flex flex-col gap-4">
+<div class="flex items-center justify-between px-1">
+<h2 class="text-lg font-bold">Detailed History</h2>
+<button class="text-primary font-semibold text-sm">Filter</button>
+</div>
+<!-- Table-like List (Optimized for mobile) -->
+<div class="flex flex-col gap-3">
+<!-- Record Card 1 -->
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+<div class="p-4 flex flex-col gap-3">
+<div class="flex justify-between items-start">
+<div>
+<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Programme Name</p>
+<p class="font-bold text-slate-900 dark:text-white">Social Security Housing</p>
+</div>
+<span class="px-2 py-1 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-bold">Issued</span>
+</div>
+<div class="grid grid-cols-2 gap-y-3">
+<div>
+<p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Beneficiary</p>
+<p class="text-sm">John Doe</p>
+</div>
+<div>
+<p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Type</p>
+<p class="text-sm">Cash</p>
+</div>
+<div>
+<p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Amount</p>
+<p class="text-sm font-bold">$1,200.00</p>
+</div>
+<div>
+<p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Date</p>
+<p class="text-sm">Oct 12, 2023</p>
+</div>
+</div>
+</div>
+<!-- Expandable Details Placeholder -->
+<button class="w-full flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 text-xs font-semibold text-slate-500 hover:text-primary transition-colors">
+<span>Payment Distribution Details</span>
+<span class="material-symbols-outlined text-sm">expand_more</span>
+</button>
+</div>
+<!-- Record Card 2 (Pending) -->
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+<div class="p-4 flex flex-col gap-3">
+<div class="flex justify-between items-start">
+<div>
+<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Programme Name</p>
+<p class="font-bold text-slate-900 dark:text-white">Child Care Subsidy</p>
+</div>
+<span class="px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-bold">Pending</span>
+</div>
+<div class="grid grid-cols-2 gap-y-3">
+<div>
+<p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Beneficiary</p>
+<p class="text-sm">Jane Doe</p>
+</div>
+<div>
+<p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Type</p>
+<p class="text-sm">In-Kind</p>
+</div>
+<div>
+<p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Item</p>
+<p class="text-sm font-bold">Health Voucher</p>
+</div>
+<div>
+<p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Date</p>
+<p class="text-sm italic text-slate-400">Processing</p>
+</div>
+</div>
+</div>
+<button class="w-full flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 text-xs font-semibold text-slate-500">
+<span>View Approval Timeline</span>
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+</div>
+<!-- Record Card 3 (Failed) -->
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+<div class="p-4 flex flex-col gap-3">
+<div class="flex justify-between items-start">
+<div>
+<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Programme Name</p>
+<p class="font-bold text-slate-900 dark:text-white">Education Grant</p>
+</div>
+<span class="px-2 py-1 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs font-bold">Failed</span>
+</div>
+<div class="grid grid-cols-2 gap-y-3">
+<div>
+<p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Beneficiary</p>
+<p class="text-sm">John Doe</p>
+</div>
+<div>
+<p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Type</p>
+<p class="text-sm">Cash</p>
+</div>
+<div>
+<p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Amount</p>
+<p class="text-sm font-bold">$500.00</p>
+</div>
+<div>
+<p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Date</p>
+<p class="text-sm">Sept 20, 2023</p>
+</div>
+</div>
+</div>
+<div class="px-4 py-3 bg-red-50 dark:bg-red-900/10 border-t border-red-100 dark:border-red-900/20 text-[11px] text-red-600 dark:text-red-400 flex items-start gap-2">
+<span class="material-symbols-outlined text-[14px]">error</span>
+<span>Bank account verification failed. Please update your profile.</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Navigation (Mobile persistent feel) -->
+<nav class="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-2 flex justify-around items-center sticky bottom-0 w-full z-20">
+<button class="flex flex-col items-center p-2 text-slate-400">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="text-[10px] font-bold">Dashboard</span>
+</button>
+<button class="flex flex-col items-center p-2 text-primary">
+<span class="material-symbols-outlined">payments</span>
+<span class="text-[10px] font-bold">Benefits</span>
+</button>
+<button class="flex flex-col items-center p-2 text-slate-400">
+<span class="material-symbols-outlined">description</span>
+<span class="text-[10px] font-bold">Apps</span>
+</button>
+<button class="flex flex-col items-center p-2 text-slate-400">
+<span class="material-symbols-outlined">person</span>
+<span class="text-[10px] font-bold">Profile</span>
+</button>
+</nav>
+<!-- Sidebar (Hidden by default, shown as an overlay in mobile if needed) -->
+<div class="hidden absolute left-0 top-0 z-50 size-full min-h-screen bg-black/40 backdrop-blur-sm">
+<div class="flex h-full min-h-screen w-3/4 flex-col gap-4 bg-background-light dark:bg-background-dark p-6 shadow-2xl">
+<div class="flex items-center justify-between mb-4">
+<p class="text-slate-900 dark:text-white text-xl font-bold leading-tight">Menu</p>
+<span class="material-symbols-outlined cursor-pointer">close</span>
+</div>
+<div class="flex items-center gap-3 mb-6">
+<div class="size-12 rounded-full bg-primary/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">account_circle</span>
+</div>
+<div>
+<p class="text-sm font-bold">Citizen User</p>
+<p class="text-xs text-slate-500">ID: 8829-001</p>
+</div>
+</div>
+<ul class="flex flex-col gap-2">
+<li class="flex h-12 items-center gap-4 rounded-lg px-4 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+<span class="material-symbols-outlined text-slate-500">dashboard</span>
+<p class="text-slate-900 dark:text-white text-base font-semibold truncate">Dashboard</p>
+</li>
+<li class="flex h-12 items-center gap-4 rounded-lg px-4 bg-primary text-white shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined">payments</span>
+<p class="text-base font-semibold truncate">My Benefits</p>
+</li>
+<li class="flex h-12 items-center gap-4 rounded-lg px-4 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+<span class="material-symbols-outlined text-slate-500">description</span>
+<p class="text-slate-900 dark:text-white text-base font-semibold truncate">Applications</p>
+</li>
+<li class="flex h-12 items-center gap-4 rounded-lg px-4 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+<span class="material-symbols-outlined text-slate-500">history</span>
+<p class="text-slate-900 dark:text-white text-base font-semibold truncate">History</p>
+</li>
+<li class="mt-4 border-t border-slate-200 dark:border-slate-800 pt-4 flex h-12 items-center gap-4 rounded-lg px-4 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+<span class="material-symbols-outlined text-slate-500">settings</span>
+<p class="text-slate-900 dark:text-white text-base font-semibold truncate">Settings</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</body></html>

@@ -1,0 +1,8 @@
+export { default as Dashboard } from './Dashboard'
+export { default as MyFamily } from './MyFamily'
+export { default as MyProfile } from './MyProfile'
+export { default as Documents } from './Documents'
+export { default as Benefits } from './Benefits'
+export { default as Programmes } from './Programmes'
+export { default as Grievances } from './Grievances'
+export { default as Settings } from './Settings'
