@@ -76,6 +76,7 @@ interface WizardState {
   currentMemberIndex: number
   isLoading: boolean
   error: string | null
+  headData: { first_name: string; last_name: string; national_id: string; phone?: string; email?: string } | null
 }
 
 interface UploadedDoc {
@@ -134,6 +135,7 @@ function Step1FamilyAndAddress({
     intake_channel: string
     head_first_name: string
     head_last_name: string
+    head_national_id: string
     phone?: string
     email?: string
     geo_code?: string
@@ -148,6 +150,7 @@ function Step1FamilyAndAddress({
     intake_channel: 'web_portal',
     head_first_name: '',
     head_last_name: '',
+    head_national_id: '',
     phone: '',
     email: '',
     geo_code: '',
@@ -162,13 +165,14 @@ function Step1FamilyAndAddress({
   })
 
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
+  const [checkingNid, setCheckingNid] = useState(false)
 
   const validateEmail = (email: string): boolean => {
     if (!email) return true
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     const errors: Record<string, string> = {}
@@ -178,6 +182,13 @@ function Step1FamilyAndAddress({
     }
     if (!formData.head_last_name.trim()) {
       errors.head_last_name = 'Last name is required'
+    }
+    // National ID validation
+    const cleanNid = formData.head_national_id.replace(/\D/g, '')
+    if (!cleanNid) {
+      errors.head_national_id = 'National ID is required for the head of household'
+    } else if (cleanNid.length !== 14) {
+      errors.head_national_id = 'National ID must be exactly 14 digits'
     }
     if (formData.email && !validateEmail(formData.email)) {
       errors.email = 'Invalid email format'
@@ -193,6 +204,27 @@ function Step1FamilyAndAddress({
       setValidationErrors(errors)
       return
     }
+
+    // Check national_id uniqueness via API
+    setCheckingNid(true)
+    try {
+      const checkRes = await fetch(`http://localhost:3001/api/v1/registration/check-national-id/${cleanNid}`)
+      if (!checkRes.ok) {
+        throw new Error(`HTTP ${checkRes.status}: Failed to verify National ID`)
+      }
+      const checkData = await checkRes.json()
+      if (checkData.exists) {
+        setValidationErrors({ head_national_id: 'A family already exists with a member using this National ID. Registration is not allowed.' })
+        setCheckingNid(false)
+        return
+      }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Unable to verify National ID. Please try again.'
+      setValidationErrors({ head_national_id: errorMsg })
+      setCheckingNid(false)
+      return
+    }
+    setCheckingNid(false)
 
     setValidationErrors({})
     onNext(formData)
@@ -251,6 +283,33 @@ function Step1FamilyAndAddress({
                 <p className="text-red-500 text-xs mt-1">{validationErrors.head_last_name}</p>
               )}
             </div>
+          </div>
+
+          <div>
+            <label htmlFor="head_national_id" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Head&apos;s National ID (14 digits) *
+            </label>
+            <input
+              id="head_national_id"
+              type="text"
+              inputMode="numeric"
+              value={formData.head_national_id}
+              onChange={(e) => {
+                const digits = e.target.value.replace(/\D/g, '').slice(0, 14)
+                setFormData(prev => ({ ...prev, head_national_id: digits }))
+                if (validationErrors.head_national_id) {
+                  setValidationErrors(prev => { const n = { ...prev }; delete n.head_national_id; return n })
+                }
+              }}
+              placeholder="Enter 14-digit National ID"
+              maxLength={14}
+              className={`w-full px-4 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600 ${validationErrors.head_national_id ? 'border-red-500' : ''}`}
+              required
+            />
+            {validationErrors.head_national_id && (
+              <p className="text-red-500 text-xs mt-1">{validationErrors.head_national_id}</p>
+            )}
+            <p className="text-xs text-gray-500 mt-1">Required — ensures no duplicate registrations</p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -463,13 +522,13 @@ function Step1FamilyAndAddress({
 
         <button
           type="submit"
-          disabled={isLoading}
+          disabled={isLoading || checkingNid}
           className="w-full py-3 px-4 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-2"
         >
-          {isLoading ? (
+          {isLoading || checkingNid ? (
             <>
               <span className="material-symbols-outlined animate-spin">progress_activity</span>
-              Creating Family...
+              {checkingNid ? 'Verifying National ID...' : 'Creating Family...'}
             </>
           ) : (
             <>
@@ -491,6 +550,7 @@ function Step2Members({
   familyUuid,
   householdSize,
   membersAdded,
+  headData,
   onMemberAdded,
   onNext, 
   onBack,
@@ -500,24 +560,26 @@ function Step2Members({
   familyUuid: string
   householdSize: number
   membersAdded: number
+  headData: { first_name: string; last_name: string; national_id: string; phone?: string; email?: string } | null
   onMemberAdded: (member: MemberData) => void
   onNext: () => void
   onBack: () => void
   isLoading: boolean
   error: string | null
 }) {
+  const isFirstMember = membersAdded === 0
   const [formData, setFormData] = useState<MemberData>({
-    first_name: '',
-    last_name: '',
-    national_id: '',
+    first_name: isFirstMember && headData ? headData.first_name : '',
+    last_name: isFirstMember && headData ? headData.last_name : '',
+    national_id: isFirstMember && headData ? headData.national_id : '',
     date_of_birth: '',
     gender: undefined,
-    relationship_to_head: membersAdded === 0 ? 'head' : '',
+    relationship_to_head: isFirstMember ? 'head' : '',
     marital_status: '',
     alive_flag: true,
     use_family_address: false,
-    phone: '',
-    email: '',
+    phone: isFirstMember && headData?.phone ? headData.phone : '',
+    email: isFirstMember && headData?.email ? headData.email : '',
     current_address: {
       line1: '',
       line2: '',
@@ -641,6 +703,15 @@ function Step2Members({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {isFirstMember && (
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-2">
+            <p className="text-sm text-blue-700 dark:text-blue-300 flex items-center gap-2">
+              <span className="material-symbols-outlined text-base">info</span>
+              Head of Household details are pre-filled from family registration and cannot be changed.
+            </p>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label htmlFor="first_name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -651,8 +722,9 @@ function Step2Members({
               type="text"
               value={formData.first_name}
               onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
-              className="w-full px-4 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
+              className={`w-full px-4 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600 ${isFirstMember ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : ''}`}
               required
+              readOnly={isFirstMember}
             />
           </div>
           <div>
@@ -664,15 +736,16 @@ function Step2Members({
               type="text"
               value={formData.last_name}
               onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
-              className="w-full px-4 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
+              className={`w-full px-4 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600 ${isFirstMember ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : ''}`}
               required
+              readOnly={isFirstMember}
             />
           </div>
         </div>
 
         <div>
           <label htmlFor="national_id" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            National ID (14 digits)
+            National ID (14 digits){isFirstMember ? ' *' : ''}
           </label>
           <input
             id="national_id"
@@ -680,12 +753,14 @@ function Step2Members({
             inputMode="numeric"
             value={formData.national_id || ''}
             onChange={(e) => {
+              if (isFirstMember) return
               const digits = e.target.value.replace(/\D/g, '').slice(0, 14)
               setFormData(prev => ({ ...prev, national_id: digits }))
             }}
             placeholder="Enter 14-digit National ID"
             maxLength={14}
-            className={`w-full px-4 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600 ${validationErrors.national_id ? 'border-red-500' : ''}`}
+            className={`w-full px-4 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600 ${validationErrors.national_id ? 'border-red-500' : ''} ${isFirstMember ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : ''}`}
+            readOnly={isFirstMember}
           />
           {validationErrors.national_id && (
             <p className="text-red-500 text-xs mt-1">{validationErrors.national_id}</p>
@@ -704,12 +779,14 @@ function Step2Members({
               inputMode="numeric"
               value={formData.phone || ''}
               onChange={(e) => {
+                if (isFirstMember && headData?.phone) return
                 const digits = e.target.value.replace(/\D/g, '').slice(0, 10)
                 setFormData(prev => ({ ...prev, phone: digits }))
               }}
               placeholder="10-digit phone number"
               maxLength={10}
-              className="w-full px-4 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
+              className={`w-full px-4 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600 ${isFirstMember && headData?.phone ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : ''}`}
+              readOnly={isFirstMember && !!headData?.phone}
             />
             <p className="text-xs text-gray-500 mt-1">10 digits only (without country code)</p>
           </div>
@@ -721,9 +798,13 @@ function Step2Members({
               id="member_email"
               type="email"
               value={formData.email || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+              onChange={(e) => {
+                if (isFirstMember && headData?.email) return
+                setFormData(prev => ({ ...prev, email: e.target.value }))
+              }}
               placeholder="name@example.com"
-              className={`w-full px-4 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600 ${validationErrors.email ? 'border-red-500' : ''}`}
+              className={`w-full px-4 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600 ${validationErrors.email ? 'border-red-500' : ''} ${isFirstMember && headData?.email ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : ''}`}
+              readOnly={isFirstMember && !!headData?.email}
             />
             {validationErrors.email && (
               <p className="text-red-500 text-xs mt-1">{validationErrors.email}</p>
@@ -770,9 +851,13 @@ function Step2Members({
             <select
               id="relationship"
               value={formData.relationship_to_head}
-              onChange={(e) => setFormData(prev => ({ ...prev, relationship_to_head: e.target.value }))}
-              className="w-full px-4 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
+              onChange={(e) => {
+                if (isFirstMember) return
+                setFormData(prev => ({ ...prev, relationship_to_head: e.target.value }))
+              }}
+              className={`w-full px-4 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600 ${isFirstMember ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : ''}`}
               required
+              disabled={isFirstMember}
             >
               <option value="">Select...</option>
               <option value="head">Head of Household</option>
@@ -923,6 +1008,16 @@ function Step2Members({
             className="w-full py-3 px-4 bg-green-600 text-white rounded-lg font-medium"
           >
             All Members Added — Continue to Documents
+          </button>
+        )}
+
+        {membersAdded > 0 && membersAdded < householdSize && (
+          <button
+            type="button"
+            onClick={onNext}
+            className="w-full py-3 px-4 border border-amber-500 text-amber-700 dark:text-amber-400 rounded-lg font-medium text-sm"
+          >
+            Skip remaining members — Continue with {membersAdded} member{membersAdded > 1 ? 's' : ''} (household size will be updated)
           </button>
         )}
       </form>
@@ -1441,6 +1536,7 @@ export default function RegistrationWizard() {
     currentMemberIndex: 0,
     isLoading: false,
     error: null,
+    headData: null,
   })
   
   const [isEditMode, setIsEditMode] = useState(false)
@@ -1507,6 +1603,7 @@ export default function RegistrationWizard() {
     intake_channel: string
     head_first_name: string
     head_last_name: string
+    head_national_id: string
     phone?: string
     email?: string
     geo_code?: string
@@ -1521,6 +1618,7 @@ export default function RegistrationWizard() {
       intake_channel: data.intake_channel,
       head_first_name: data.head_first_name,
       head_last_name: data.head_last_name,
+      head_national_id: data.head_national_id,
       phone: data.phone || null,
       email: data.email || null,
       geo_code: data.geo_code || null,
@@ -1556,6 +1654,13 @@ export default function RegistrationWizard() {
       familyId,
       family: familyResult.data!,
       address: addressResult.data!,
+      headData: {
+        first_name: data.head_first_name,
+        last_name: data.head_last_name,
+        national_id: data.head_national_id,
+        phone: data.phone,
+        email: data.email,
+      },
       currentStep: 2, // Go to Members (was Family Docs before)
       isLoading: false,
     }))
@@ -1684,6 +1789,7 @@ export default function RegistrationWizard() {
                   familyUuid={state.familyUuid}
                   householdSize={state.family.household_size}
                   membersAdded={state.members.length}
+                  headData={state.headData}
                   onMemberAdded={handleMemberAdded}
                   onNext={() => goToStep(3)}
                   onBack={() => goToStep(1)}

@@ -10,8 +10,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
-
-const API_BASE = 'http://localhost:3001/api/v1'
+import { authFetch } from '@/services/authFetch'
 
 // Database-aligned types (post-migration 006)
 interface FamilyDB {
@@ -141,7 +140,7 @@ export default function MyFamily() {
 
         // Fetch family with all related data (members, address, documents)
         // Use uuid for API calls (internal identifier)
-        const familyRes = await fetch(`${API_BASE}/families/${user.uuid}`)
+        const familyRes = await authFetch(`/families/${user.uuid}`)
         const familyData = await familyRes.json()
         
         if (!familyData.success) {

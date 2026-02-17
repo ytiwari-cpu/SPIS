@@ -51,6 +51,7 @@ export enum DocumentType {
 }
 
 export enum DocumentStatus {
+  UPLOADED = 'UPLOADED',
   PENDING = 'PENDING',
   VERIFIED = 'VERIFIED',
   REJECTED = 'REJECTED',

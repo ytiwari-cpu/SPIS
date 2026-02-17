@@ -1,29 +1,54 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useAuthStore } from '@/store/authStore'
 
-const navigationItems = [
-  { path: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
-  { path: '/family', label: 'My Family', icon: 'family_restroom' },
-  { path: '/profile', label: 'My Profile', icon: 'person' },
-  { path: '/documents', label: 'Documents', icon: 'description' },
-  { path: '/programmes', label: 'Programmes', icon: 'verified_user' },
-  { path: '/benefits', label: 'Benefits', icon: 'payments' },
-  { path: '/grievances', label: 'Grievances', icon: 'error_outline' },
+interface NavItem {
+  path: string
+  label: string
+  icon: string
+  requiredPermission?: string
+}
+
+const allNavigationItems: NavItem[] = [
+  { path: '/dashboard', label: 'Dashboard', icon: 'dashboard', requiredPermission: 'view_dashboard' },
+  { path: '/family', label: 'My Family', icon: 'family_restroom', requiredPermission: 'view_family' },
+  { path: '/profile', label: 'My Profile', icon: 'person', requiredPermission: 'view_profile' },
+  { path: '/documents', label: 'Documents', icon: 'description', requiredPermission: 'view_documents' },
+  { path: '/programmes', label: 'Programmes', icon: 'verified_user', requiredPermission: 'view_programmes' },
+  { path: '/benefits', label: 'Benefits', icon: 'payments', requiredPermission: 'view_benefits' },
+  { path: '/grievances', label: 'Grievances', icon: 'error_outline', requiredPermission: 'view_grievances' },
 ]
 
-const bottomNavItems = [
-  { path: '/dashboard', label: 'Home', icon: 'home' },
-  { path: '/family', label: 'Family', icon: 'family_restroom' },
-  { path: '/benefits', label: 'Benefits', icon: 'payments' },
+const allBottomNavItems: NavItem[] = [
+  { path: '/dashboard', label: 'Home', icon: 'home', requiredPermission: 'view_dashboard' },
+  { path: '/family', label: 'Family', icon: 'family_restroom', requiredPermission: 'view_family' },
+  { path: '/benefits', label: 'Benefits', icon: 'payments', requiredPermission: 'view_benefits' },
   { path: '/settings', label: 'More', icon: 'more_horiz' },
 ]
 
 export default function CitizenLayout() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, logout } = useAuthStore()
+  const { user, logout, hasPermission, hasRole } = useAuthStore()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+
+  // Filter navigation items based on user permissions
+  const navigationItems = useMemo(() => {
+    return allNavigationItems.filter(item => {
+      if (!item.requiredPermission) return true
+      return hasPermission(item.requiredPermission)
+    })
+  }, [hasPermission])
+
+  const bottomNavItems = useMemo(() => {
+    return allBottomNavItems.filter(item => {
+      if (!item.requiredPermission) return true
+      return hasPermission(item.requiredPermission)
+    })
+  }, [hasPermission])
+
+  // Check if user is admin
+  const isAdmin = hasRole('SuperAdmin') || hasRole('Admin')
 
   const handleLogout = () => {
     logout()
@@ -42,7 +67,7 @@ export default function CitizenLayout() {
         </button>
 
         <div className="flex items-center gap-3 ml-2 md:ml-0">
-          <Link to="/dashboard" className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary text-white">
+          <Link to="/" className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary text-white">
             <span className="material-symbols-outlined">account_balance</span>
           </Link>
           <h1 className="text-lg font-bold text-gray-900 dark:text-white">Citizen Portal</h1>
@@ -127,6 +152,20 @@ export default function CitizenLayout() {
               <span className="material-symbols-outlined">settings</span>
               <p className="text-sm font-medium">Settings</p>
             </Link>
+            {isAdmin && (
+              <Link
+                to="/admin"
+                onClick={() => setIsSidebarOpen(false)}
+                className={`flex h-12 items-center gap-3 rounded-lg px-4 transition-colors ${
+                  location.pathname === '/admin'
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                }`}
+              >
+                <span className="material-symbols-outlined">admin_panel_settings</span>
+                <p className="text-sm font-medium">Admin</p>
+              </Link>
+            )}
             <button
               onClick={handleLogout}
               className="w-full flex h-12 items-center gap-3 rounded-lg px-4 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"

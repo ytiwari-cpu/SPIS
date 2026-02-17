@@ -2,14 +2,19 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore, useFamilyUuid, useFamilyId } from '@/store/authStore'
 import { familyApi } from '@/services/familyApi'
+import { authFetch } from '@/services/authFetch'
 import type { DbFamilyWithDetails, RegistrationStatus } from '@/types/database'
 
 const getStatusBadge = (status: RegistrationStatus) => {
   const styles: Record<string, string> = {
     draft: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+    DRAFT: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
     pending_verification: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+    SUBMITTED: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
     verified: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+    VERIFIED: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
     rejected: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    REJECTED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
   }
   return styles[status] || styles.draft
 }
@@ -21,6 +26,9 @@ export default function Dashboard() {
   const [familyData, setFamilyData] = useState<DbFamilyWithDetails | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [submitSuccess, setSubmitSuccess] = useState(false)
 
   useEffect(() => {
     if (familyUuid) {
@@ -44,6 +52,29 @@ export default function Dashboard() {
       setError(err instanceof Error ? err.message : 'Failed to load family data')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleSubmitRegistration = async () => {
+    if (!familyUuid) return
+    setIsSubmitting(true)
+    setSubmitError(null)
+
+    try {
+      const res = await authFetch(`/registration/family/${familyUuid}/submit`, { method: 'POST' })
+      const data = await res.json()
+
+      if (data.success) {
+        setSubmitSuccess(true)
+        // Reload family data to reflect the new status
+        await loadFamilyData()
+      } else {
+        setSubmitError(data.error || 'Failed to submit registration')
+      }
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Network error')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -144,6 +175,58 @@ export default function Dashboard() {
             <span className="material-symbols-outlined text-lg">chevron_right</span>
           </Link>
         </div>
+
+        {/* DRAFT — Submit Registration Banner */}
+        {(familyData.registration_status === 'DRAFT' || familyData.registration_status === 'draft') && (
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 mb-6">
+            <div className="flex items-start gap-3">
+              <span className="material-symbols-outlined text-amber-600 text-2xl shrink-0 mt-0.5">edit_note</span>
+              <div className="flex-1">
+                <h3 className="font-bold text-amber-800 dark:text-amber-300">Registration in Draft</h3>
+                <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
+                  Your family registration is saved as a draft with {memberCount} member{memberCount !== 1 ? 's' : ''}.
+                  Submit to send for verification. The household size will be updated to match your actual member count.
+                </p>
+                {submitError && (
+                  <div className="mt-2 p-2 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded text-sm text-red-700 dark:text-red-400">
+                    {submitError}
+                  </div>
+                )}
+                {submitSuccess && (
+                  <div className="mt-2 p-2 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded text-sm text-green-700 dark:text-green-400">
+                    Registration submitted successfully!
+                  </div>
+                )}
+                <div className="flex gap-3 mt-3">
+                  <button
+                    onClick={handleSubmitRegistration}
+                    disabled={isSubmitting || memberCount === 0}
+                    className="px-5 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 flex items-center gap-2 text-sm"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>
+                        Submitting…
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-base">send</span>
+                        Submit Registration
+                      </>
+                    )}
+                  </button>
+                  <Link
+                    to={`/register?edit=${familyUuid}`}
+                    className="px-5 py-2 border border-gray-300 dark:border-gray-600 rounded-lg font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2 text-sm"
+                  >
+                    <span className="material-symbols-outlined text-base">edit</span>
+                    Continue Editing
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Summary Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8">

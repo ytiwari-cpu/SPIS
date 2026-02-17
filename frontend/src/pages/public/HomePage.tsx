@@ -1,8 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { useIsDevMode } from '@/store/authStore'
-import { devApi, authApi } from '@/services/familyApi'
-import type { FamilyListItem } from '@/types/database'
+import axios from 'axios'
+import { useAuthStore } from '@/store/authStore'
 
 // Static notices data (public information)
 const publicNotices = [
@@ -59,21 +58,115 @@ const serviceCards = [
   },
 ]
 
+// ═══════════════════════════════════════════════════════════════
+// SQL Editor — Supabase RPC config for all 3 services
+// ═══════════════════════════════════════════════════════════════
+
+interface ServiceConfig {
+  id: string
+  label: string
+  icon: string
+  color: string
+  supabaseUrl: string
+  supabaseKey: string
+  defaultQuery: string
+  quickTables: string[]
+}
+
+const dbServices: ServiceConfig[] = [
+  {
+    id: 'family',
+    label: 'Family DB',
+    icon: 'family_restroom',
+    color: 'bg-blue-600',
+    supabaseUrl: 'https://xdupcfxxcbltjmdgzzhf.supabase.co',
+    supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkdXBjZnh4Y2JsdGptZGd6emhmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MDYyODk1MiwiZXhwIjoyMDg2MjA0OTUyfQ.hyRMxWe9mlVVyb1rmBLv4Ee1l1MIUTo2J8hOohDlxCk',
+    defaultQuery: 'SELECT * FROM family LIMIT 10',
+    quickTables: ['family', 'family_member', 'address', 'documents'],
+  },
+  {
+    id: 'iam',
+    label: 'IAM DB',
+    icon: 'shield_person',
+    color: 'bg-purple-600',
+    supabaseUrl: 'https://wrxrstmncezssrscrkxs.supabase.co',
+    supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndyeHJzdG1uY2V6c3Nyc2Nya3hzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MDg2ODc5MiwiZXhwIjoyMDg2NDQ0NzkyfQ.MsQ4yGGoXc8qpNScZqeOS0JqoTDuAMENmMrzfbuP0TQ',
+    defaultQuery: 'SELECT user_id, email, status FROM users LIMIT 10',
+    quickTables: ['users', 'user_roles', 'password_reset_tokens', 'login_events'],
+  },
+  {
+    id: 'email',
+    label: 'Email DB',
+    icon: 'mail',
+    color: 'bg-green-600',
+    supabaseUrl: 'https://qlehzgxxhbbiniouwgta.supabase.co',
+    supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFsZWh6Z3h4aGJiaW5pb3V3Z3RhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MDg3NDUyOCwiZXhwIjoyMDg2NDUwNTI4fQ.Z7n9JDcABBe6OeiLaLMCl4gMPjfJthyOrE7ObaSc_To',
+    defaultQuery: 'SELECT id, to_email, subject, status, created_at FROM emails ORDER BY created_at DESC LIMIT 10',
+    quickTables: ['emails', 'email_templates', 'email_events'],
+  },
+]
+
+async function executeSupabaseSQL(
+  supabaseUrl: string,
+  supabaseKey: string,
+  query: string,
+): Promise<{ data?: unknown[]; error?: string; duration_ms: number }> {
+  const start = Date.now()
+  try {
+    const trimmed = query.trim().toUpperCase()
+    let rpcFn = 'exec_sql'
+    if (trimmed.startsWith('INSERT') || trimmed.startsWith('UPDATE') || trimmed.startsWith('DELETE')) {
+      rpcFn = query.toUpperCase().includes('RETURNING') ? 'exec_dml' : 'exec_ddl'
+    } else if (trimmed.startsWith('CREATE') || trimmed.startsWith('ALTER') || trimmed.startsWith('DROP')) {
+      rpcFn = 'exec_ddl'
+    }
+
+    const res = await axios.post(
+      `${supabaseUrl}/rest/v1/rpc/${rpcFn}`,
+      { query },
+      {
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 15000,
+      },
+    )
+
+    const data = Array.isArray(res.data) ? res.data : res.data ? [res.data] : []
+    return { data, duration_ms: Date.now() - start }
+  } catch (err: unknown) {
+    const msg = axios.isAxiosError(err)
+      ? err.response?.data?.message || err.response?.data?.error || err.message
+      : (err as Error).message
+    return { error: String(msg), duration_ms: Date.now() - start }
+  }
+}
+
 export default function HomePage() {
-  const isDevMode = useIsDevMode()
   const location = useLocation()
-  const [activeDevTab, setActiveDevTab] = useState<'families' | 'sql' | 'schema'>('families')
-  
+  const { session } = useAuthStore()
+  const isAuthenticated = !!session?.access_token
+
   // Registration success message from navigation state
   const registrationSuccess = location.state?.registrationSuccess
   const successMessage = location.state?.message
   const registeredFamilyId = location.state?.familyId
   const [showSuccessMessage, setShowSuccessMessage] = useState(!!registrationSuccess)
-  
-  // Clear the state so the message doesn't persist on refresh
+
+  // SQL Editor state
+  const [activeService, setActiveService] = useState<string>('family')
+  const [sqlQueries, setSqlQueries] = useState<Record<string, string>>(() => {
+    const q: Record<string, string> = {}
+    for (const s of dbServices) q[s.id] = s.defaultQuery
+    return q
+  })
+  const [sqlResults, setSqlResults] = useState<Record<string, { data?: unknown[]; error?: string; duration_ms?: number }>>({})
+  const [executing, setExecuting] = useState<Record<string, boolean>>({})
+
   useEffect(() => {
     if (registrationSuccess) {
-      // Clear the location state after 30 seconds
       const timer = setTimeout(() => {
         setShowSuccessMessage(false)
         globalThis.history.replaceState({}, document.title)
@@ -81,83 +174,20 @@ export default function HomePage() {
       return () => clearTimeout(timer)
     }
   }, [registrationSuccess])
-  
-  // Dev tools state
-  const [families, setFamilies] = useState<FamilyListItem[]>([])
-  const [loadingFamilies, setLoadingFamilies] = useState(false)
-  const [sqlQuery, setSqlQuery] = useState('SELECT * FROM family LIMIT 10')
-  const [sqlResult, setSqlResult] = useState<{ data?: unknown[]; error?: string; duration_ms?: number } | null>(null)
-  const [executingSql, setExecutingSql] = useState(false)
-  const [schemaInfo, setSchemaInfo] = useState<Record<string, { exists: boolean; error?: string }> | null>(null)
-  const [loadingSchema, setLoadingSchema] = useState(false)
-  const [seedingData, setSeedingData] = useState(false)
-  const [seedMessage, setSeedMessage] = useState('')
 
-  useEffect(() => {
-    if (isDevMode) {
-      loadFamilies()
-    }
-  }, [isDevMode])
+  const currentService = dbServices.find((s) => s.id === activeService)!
 
-  const loadFamilies = async () => {
-    setLoadingFamilies(true)
-    try {
-      const response = await authApi.listFamilies()
-      if (response.success && response.data) {
-        setFamilies(response.data)
-      }
-    } catch (err) {
-      console.error('Failed to load families:', err)
-    } finally {
-      setLoadingFamilies(false)
-    }
-  }
+  const handleExecute = async (serviceId: string) => {
+    const svc = dbServices.find((s) => s.id === serviceId)!
+    const query = sqlQueries[serviceId]
+    if (!query?.trim()) return
 
-  const loadSchema = async () => {
-    setLoadingSchema(true)
-    try {
-      const response = await devApi.getSchema()
-      if (response.success && response.tables) {
-        setSchemaInfo(response.tables)
-      }
-    } catch (err) {
-      console.error('Failed to load schema:', err)
-    } finally {
-      setLoadingSchema(false)
-    }
-  }
+    setExecuting((prev) => ({ ...prev, [serviceId]: true }))
+    setSqlResults((prev) => ({ ...prev, [serviceId]: {} as never }))
 
-  const executeSql = async () => {
-    if (!sqlQuery.trim()) return
-    
-    setExecutingSql(true)
-    setSqlResult(null)
-    try {
-      const result = await devApi.executeSql(sqlQuery)
-      setSqlResult(result)
-    } catch (err: unknown) {
-      setSqlResult({ error: err instanceof Error ? err.message : 'Execution failed' })
-    } finally {
-      setExecutingSql(false)
-    }
-  }
-
-  const handleSeedData = async () => {
-    setSeedingData(true)
-    setSeedMessage('')
-    try {
-      const result = await devApi.seedData()
-      if (result.success) {
-        setSeedMessage(`Created family: ${result.data.family.family_id}`)
-        loadFamilies()
-      } else {
-        setSeedMessage('Seed failed')
-      }
-    } catch (err: unknown) {
-      setSeedMessage(`${err instanceof Error ? err.message : 'Seed failed'}`)
-    } finally {
-      setSeedingData(false)
-    }
+    const result = await executeSupabaseSQL(svc.supabaseUrl, svc.supabaseKey, query)
+    setSqlResults((prev) => ({ ...prev, [serviceId]: result }))
+    setExecuting((prev) => ({ ...prev, [serviceId]: false }))
   }
 
   const getCategoryBadge = (category: string) => {
@@ -169,6 +199,8 @@ export default function HomePage() {
     }
     return styles[category] || styles.GENERAL
   }
+
+  const result = sqlResults[activeService]
 
   return (
     <div className="min-h-screen">
@@ -212,305 +244,190 @@ export default function HomePage() {
               Social Protection for Every Family
             </h1>
             <p className="text-lg md:text-xl text-white/80 mb-8">
-              Access government social welfare programmes, register your family, 
+              Access government social welfare programmes, register your family,
               and receive the benefits you deserve through our unified national platform.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-              <Link
-                to="/register"
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-primary font-bold rounded-xl hover:bg-gray-100 transition-colors shadow-lg"
-              >
-                <span className="material-symbols-outlined">group_add</span>
-                Register a Family
-              </Link>
-              <Link
-                to="/login"
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20 transition-colors border border-white/20"
-              >
-                <span className="material-symbols-outlined">login</span>
-                Citizen Login
-              </Link>
+              {isAuthenticated ? (
+                <Link
+                  to="/dashboard"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-primary font-bold rounded-xl hover:bg-gray-100 transition-colors shadow-lg"
+                >
+                  <span className="material-symbols-outlined">dashboard</span>
+                  Go to Dashboard
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    to="/register"
+                    className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-primary font-bold rounded-xl hover:bg-gray-100 transition-colors shadow-lg"
+                  >
+                    <span className="material-symbols-outlined">group_add</span>
+                    Register a Family
+                  </Link>
+                  <Link
+                    to="/login"
+                    className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20 transition-colors border border-white/20"
+                  >
+                    <span className="material-symbols-outlined">login</span>
+                    Citizen Login
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
       </section>
 
-      {/* DEV MODE: Developer Tools */}
-      {isDevMode && (
-        <section className="py-8 bg-amber-50 dark:bg-amber-900/10 border-b-2 border-amber-300 dark:border-amber-700">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center gap-3 mb-6">
-              <span className="material-symbols-outlined text-amber-600 text-2xl">developer_mode</span>
-              <h2 className="text-xl font-bold text-amber-800 dark:text-amber-300">
-                Developer Tools
-              </h2>
-              <span className="text-xs bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 px-2 py-0.5 rounded font-medium">
-                DEV ONLY
-              </span>
-            </div>
-
-            {/* Tab Navigation */}
-            <div className="flex gap-2 mb-4">
-              {[
-                { id: 'families', label: 'Family List', icon: 'group' },
-                { id: 'sql', label: 'SQL Editor', icon: 'database' },
-                { id: 'schema', label: 'Schema Info', icon: 'table_chart' },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => {
-                    setActiveDevTab(tab.id as typeof activeDevTab)
-                    if (tab.id === 'schema' && !schemaInfo) loadSchema()
-                  }}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-                    activeDevTab === tab.id
-                      ? 'bg-amber-600 text-white'
-                      : 'bg-white dark:bg-gray-800 text-amber-700 dark:text-amber-300 hover:bg-amber-100'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">{tab.icon}</span>
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Tab Content */}
-            <div className="bg-white dark:bg-gray-900 rounded-xl border border-amber-200 dark:border-amber-800 overflow-hidden">
-              {/* Family List Tab */}
-              {activeDevTab === 'families' && (
-                <div className="p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold text-gray-900 dark:text-white">
-                      Registered Families ({families.length})
-                    </h3>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handleSeedData}
-                        disabled={seedingData}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50"
-                      >
-                        <span className="material-symbols-outlined text-lg">add</span>
-                        Seed Sample
-                      </button>
-                      <button
-                        onClick={loadFamilies}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm rounded-lg hover:bg-gray-300"
-                      >
-                        <span className="material-symbols-outlined text-lg">refresh</span>
-                        Refresh
-                      </button>
-                    </div>
-                  </div>
-                  
-                  {seedMessage && (
-                    <div className="mb-4 p-2 rounded text-sm bg-blue-100 text-blue-700">
-                      {seedMessage}
-                    </div>
-                  )}
-
-                  {loadingFamilies ? (
-                    <div className="flex items-center justify-center py-8 text-gray-500">
-                      <span className="material-symbols-outlined animate-spin mr-2">progress_activity</span>
-                      Loading...
-                    </div>
-                  ) : families.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      <span className="material-symbols-outlined text-4xl mb-2">folder_open</span>
-                      <p>No families found. Click "Seed Sample" to create test data.</p>
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead className="bg-gray-50 dark:bg-gray-800">
-                          <tr>
-                            <th className="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-400">Family ID</th>
-                            <th className="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-400">Code</th>
-                            <th className="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-400">Status</th>
-                            <th className="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-400">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                          {families.map((family) => (
-                            <tr key={family.family_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                              <td className="px-4 py-3 font-mono text-xs text-gray-600 dark:text-gray-400">
-                                {family.family_id.substring(0, 8)}...
-                              </td>
-                              <td className="px-4 py-3 font-semibold text-gray-900 dark:text-white">
-                                {family.family_id}
-                              </td>
-                              <td className="px-4 py-3">
-                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                  family.registration_status === 'verified' ? 'bg-green-100 text-green-700' :
-                                  family.registration_status === 'pending_verification' ? 'bg-yellow-100 text-yellow-700' :
-                                  family.registration_status === 'rejected' ? 'bg-red-100 text-red-700' :
-                                  'bg-gray-100 text-gray-700'
-                                }`}>
-                                  {family.registration_status}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3">
-                                <Link
-                                  to="/login"
-                                  onClick={() => navigator.clipboard.writeText(family.family_id)}
-                                  className="text-primary hover:underline text-sm font-medium"
-                                >
-                                  Copy ID & Login
-                                </Link>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* SQL Editor Tab */}
-              {activeDevTab === 'sql' && (
-                <div className="p-4">
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      SQL Query (SELECT only)
-                    </label>
-                    <textarea
-                      value={sqlQuery}
-                      onChange={(e) => setSqlQuery(e.target.value)}
-                      className="w-full h-32 font-mono text-sm p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white"
-                      placeholder="SELECT * FROM family LIMIT 10"
-                    />
-                  </div>
-                  <div className="flex gap-2 mb-4">
-                    <button
-                      onClick={executeSql}
-                      disabled={executingSql}
-                      className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
-                    >
-                      {executingSql ? (
-                        <>
-                          <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                          Executing...
-                        </>
-                      ) : (
-                        <>
-                          <span className="material-symbols-outlined">play_arrow</span>
-                          Execute
-                        </>
-                      )}
-                    </button>
-                    <div className="flex gap-1">
-                      {['family', 'family_member', 'address', 'documents'].map((table) => (
-                        <button
-                          key={table}
-                          onClick={() => setSqlQuery(`SELECT * FROM ${table} LIMIT 10`)}
-                          className="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300"
-                        >
-                          {table}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {sqlResult && (
-                    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                      {sqlResult.error ? (
-                        <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400">
-                          <strong>Error:</strong> {sqlResult.error}
-                        </div>
-                      ) : (
-                        <>
-                          <div className="p-2 bg-gray-50 dark:bg-gray-800 text-xs text-gray-600 dark:text-gray-400 flex justify-between">
-                            <span>{Array.isArray(sqlResult.data) ? sqlResult.data.length : 0} rows</span>
-                            <span>{sqlResult.duration_ms}ms</span>
-                          </div>
-                          <div className="max-h-64 overflow-auto">
-                            {Array.isArray(sqlResult.data) && sqlResult.data.length > 0 ? (
-                              <table className="w-full text-xs">
-                                <thead className="bg-gray-100 dark:bg-gray-800 sticky top-0">
-                                  <tr>
-                                    {Object.keys(sqlResult.data[0] as Record<string, unknown>).map((key) => (
-                                      <th key={key} className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">
-                                        {key}
-                                      </th>
-                                    ))}
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                                  {sqlResult.data.map((row, i) => (
-                                    <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                      {Object.values(row as Record<string, unknown>).map((val, j) => (
-                                        <td key={j} className="px-3 py-2 text-gray-600 dark:text-gray-400 max-w-xs truncate">
-                                          {val === null ? <span className="text-gray-400 italic">null</span> : String(val)}
-                                        </td>
-                                      ))}
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            ) : (
-                              <div className="p-4 text-center text-gray-500">No results</div>
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Schema Info Tab */}
-              {activeDevTab === 'schema' && (
-                <div className="p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold text-gray-900 dark:text-white">Database Tables</h3>
-                    <button
-                      onClick={loadSchema}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm rounded-lg hover:bg-gray-300"
-                    >
-                      <span className="material-symbols-outlined text-lg">refresh</span>
-                      Refresh
-                    </button>
-                  </div>
-
-                  {loadingSchema ? (
-                    <div className="flex items-center justify-center py-8 text-gray-500">
-                      <span className="material-symbols-outlined animate-spin mr-2">progress_activity</span>
-                      Loading schema...
-                    </div>
-                  ) : schemaInfo ? (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                      {Object.entries(schemaInfo).map(([table, info]) => (
-                        <div
-                          key={table}
-                          className={`p-3 rounded-lg border ${
-                            info.exists
-                              ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
-                              : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className={`material-symbols-outlined text-lg ${info.exists ? 'text-green-600' : 'text-red-600'}`}>
-                              {info.exists ? 'check_circle' : 'error'}
-                            </span>
-                            <span className="font-medium text-sm text-gray-900 dark:text-white">{table}</span>
-                          </div>
-                          <p className="text-xs text-gray-600 dark:text-gray-400">
-                            {info.exists ? 'Available' : info.error || 'Not found'}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      Click refresh to load schema info
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+      {/* ═══════════════════════════════════════════════════════════
+           SQL Editor — All 3 Supabase Services
+         ═══════════════════════════════════════════════════════════ */}
+      <section className="py-8 bg-gray-50 dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-3 mb-6">
+            <span className="material-symbols-outlined text-primary text-2xl">database</span>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+              SQL Editor
+            </h2>
+            <span className="text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-0.5 rounded font-medium">
+              All Services
+            </span>
           </div>
-        </section>
-      )}
+
+          {/* Service Tabs */}
+          <div className="flex gap-2 mb-4">
+            {dbServices.map((svc) => (
+              <button
+                key={svc.id}
+                onClick={() => setActiveService(svc.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                  activeService === svc.id
+                    ? `${svc.color} text-white`
+                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
+                }`}
+              >
+                <span className="material-symbols-outlined text-lg">{svc.icon}</span>
+                {svc.label}
+              </button>
+            ))}
+          </div>
+
+          {/* SQL Input + Results */}
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+            <div className="p-4">
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  SQL Query — {currentService.label}
+                </label>
+                <textarea
+                  value={sqlQueries[activeService]}
+                  onChange={(e) =>
+                    setSqlQueries((prev) => ({ ...prev, [activeService]: e.target.value }))
+                  }
+                  className="w-full h-32 font-mono text-sm p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white resize-y"
+                  placeholder={currentService.defaultQuery}
+                />
+              </div>
+
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => handleExecute(activeService)}
+                  disabled={executing[activeService]}
+                  className={`flex items-center gap-2 px-4 py-2 text-white rounded-lg hover:opacity-90 disabled:opacity-50 ${currentService.color}`}
+                >
+                  {executing[activeService] ? (
+                    <>
+                      <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
+                      Executing...
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-lg">play_arrow</span>
+                      Execute
+                    </>
+                  )}
+                </button>
+
+                <div className="flex gap-1 items-center flex-wrap">
+                  <span className="text-xs text-gray-500 mr-1">Quick:</span>
+                  {currentService.quickTables.map((table) => (
+                    <button
+                      key={table}
+                      onClick={() =>
+                        setSqlQueries((prev) => ({
+                          ...prev,
+                          [activeService]: `SELECT * FROM ${table} LIMIT 10`,
+                        }))
+                      }
+                      className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 font-mono"
+                    >
+                      {table}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Results */}
+            {result && result.duration_ms !== undefined && (
+              <div className="border-t border-gray-200 dark:border-gray-700">
+                {result.error ? (
+                  <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+                    <strong>Error:</strong> {result.error}
+                  </div>
+                ) : (
+                  <>
+                    <div className="p-2 bg-gray-50 dark:bg-gray-800 text-xs text-gray-600 dark:text-gray-400 flex justify-between px-4">
+                      <span>{Array.isArray(result.data) ? result.data.length : 0} rows</span>
+                      <span>{result.duration_ms}ms</span>
+                    </div>
+                    <div className="max-h-72 overflow-auto">
+                      {Array.isArray(result.data) && result.data.length > 0 ? (
+                        <table className="w-full text-xs">
+                          <thead className="bg-gray-100 dark:bg-gray-800 sticky top-0">
+                            <tr>
+                              {Object.keys(result.data[0] as Record<string, unknown>).map((key) => (
+                                <th
+                                  key={key}
+                                  className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap"
+                                >
+                                  {key}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                            {result.data.map((row, i) => (
+                              <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                {Object.values(row as Record<string, unknown>).map((val, j) => (
+                                  <td
+                                    key={j}
+                                    className="px-3 py-2 text-gray-600 dark:text-gray-400 max-w-xs truncate whitespace-nowrap"
+                                  >
+                                    {val === null ? (
+                                      <span className="text-gray-400 italic">null</span>
+                                    ) : (
+                                      String(val)
+                                    )}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <div className="p-4 text-center text-gray-500 text-sm">
+                          Query executed successfully. No rows returned.
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
 
       {/* About Section */}
       <section className="py-16 bg-white dark:bg-gray-900">
@@ -613,7 +530,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* CTA Section */}
+      {/* CTA Section — only for unauthenticated users */}
+      {!isAuthenticated && (
       <section className="py-16 bg-white dark:bg-gray-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="bg-gradient-to-r from-primary to-primary-dark rounded-2xl p-8 md:p-12 text-white text-center">
@@ -635,6 +553,7 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+      )}
     </div>
   )
 }

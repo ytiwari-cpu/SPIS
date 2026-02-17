@@ -54,7 +54,7 @@ export default function MyProfile() {
 
       try {
         // Use uuid for API calls (internal identifier)
-        const res = await fetch(`${API_BASE}/families/${user.uuid}`)
+        const res = await authFetch(`/families/${user.uuid}`)
         const data = await res.json()
 
         if (data.success && data.data) {

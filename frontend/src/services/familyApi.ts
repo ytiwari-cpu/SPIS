@@ -8,7 +8,6 @@ import type {
   DbAddress,
   DbDocument,
   AuthSession,
-  FamilyListItem,
   FamilyRegistrationData,
 } from '@/types/database'
 
@@ -26,14 +25,20 @@ const api = axios.create({
   timeout: 30000,
 })
 
-// Request interceptor - add family_id header for authenticated requests
+// Request interceptor - add auth headers for authenticated requests
 api.interceptors.request.use((config) => {
-  const authData = localStorage.getItem('spis-auth')
-  if (authData) {
+  const raw = sessionStorage.getItem('spis-auth-storage')
+  if (raw) {
     try {
-      const session = JSON.parse(authData) as AuthSession
-      if (session.family_id) {
-        config.headers['X-Family-ID'] = session.family_id
+      const stored = JSON.parse(raw)
+      const session = stored.state?.session as AuthSession
+      if (session) {
+        if (session.family_id) {
+          config.headers['X-Family-ID'] = session.family_id
+        }
+        if (session.access_token) {
+          config.headers['Authorization'] = `Bearer ${session.access_token}`
+        }
       }
     } catch {
       // Invalid auth data
@@ -47,8 +52,11 @@ api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('spis-auth')
-      globalThis.location.href = '/login'
+      // Only redirect if not already on login page (prevent loops)
+      if (!globalThis.location.pathname.includes('/login')) {
+        sessionStorage.removeItem('spis-auth-storage')
+        globalThis.location.href = '/login'
+      }
     }
     return Promise.reject(error)
   }
@@ -60,12 +68,10 @@ api.interceptors.response.use(
 
 export const authApi = {
   /**
-   * Login with family_id (dev mode)
+   * Login with national_id and password via IAM service
    */
-  login: async (familyId: string): Promise<ApiResponse<AuthSession>> => {
-    const response = await api.post<ApiResponse<AuthSession>>('/auth/login', {
-      family_id: familyId,
-    })
+  login: async (credentials: { national_id: string; password: string }): Promise<ApiResponse<AuthSession>> => {
+    const response = await api.post<ApiResponse<AuthSession>>('/auth/login', credentials)
     return response.data
   },
 
@@ -74,14 +80,6 @@ export const authApi = {
    */
   getMe: async (): Promise<ApiResponse<DbFamilyWithDetails>> => {
     const response = await api.get<ApiResponse<DbFamilyWithDetails>>('/auth/me')
-    return response.data
-  },
-
-  /**
-   * List all families (dev mode only)
-   */
-  listFamilies: async (): Promise<ApiResponse<FamilyListItem[]>> => {
-    const response = await api.get<ApiResponse<FamilyListItem[]>>('/auth/families')
     return response.data
   },
 
@@ -279,52 +277,6 @@ export const documentApi = {
   },
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// DEV API (Development tools)
-// ════════════════════════════════════════════════════════════════════════════
-
-export const devApi = {
-  /**
-   * Get health status
-   */
-  health: async (): Promise<{ status: string; database: string }> => {
-    const response = await api.get<{ status: string; database: string }>('/health'.replace('/api/v1', ''))
-    return response.data
-  },
-
-  /**
-   * Get schema info
-   */
-  schema: async (): Promise<ApiResponse<Record<string, unknown>>> => {
-    const response = await api.get<ApiResponse<Record<string, unknown>>>('/dev/schema')
-    return response.data
-  },
-
-  /**
-   * Seed sample data
-   */
-  seed: async (): Promise<ApiResponse<{ family: DbFamily; head_member: DbFamilyMember; address: DbAddress }>> => {
-    const response = await api.post<ApiResponse<{ family: DbFamily; head_member: DbFamilyMember; address: DbAddress }>>('/dev/seed')
-    return response.data
-  },
-
-  /**
-   * Get table data
-   */
-  getTable: async (tableName: string, params?: { page?: number; limit?: number }): Promise<PaginatedResponse<Record<string, unknown>>> => {
-    const response = await api.get<PaginatedResponse<Record<string, unknown>>>(`/dev/table/${tableName}`, { params })
-    return response.data
-  },
-
-  /**
-   * Execute SQL (dev only)
-   */
-  executeSql: async (query: string): Promise<ApiResponse<unknown>> => {
-    const response = await api.post<ApiResponse<unknown>>('/dev/sql', { query })
-    return response.data
-  },
-}
-
 // Default export
 export default {
   auth: authApi,
@@ -332,5 +284,4 @@ export default {
   member: memberApi,
   address: addressApi,
   document: documentApi,
-  dev: devApi,
 }

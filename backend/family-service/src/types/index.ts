@@ -228,6 +228,8 @@ export interface CreateMemberRequest {
   current_address_id?: string
   alive_flag?: boolean
   marital_status?: MaritalStatus
+  phone?: string
+  email?: string
 }
 
 export interface UpdateMemberRequest {
@@ -240,6 +242,8 @@ export interface UpdateMemberRequest {
   current_address_id?: string
   alive_flag?: boolean
   marital_status?: MaritalStatus
+  phone?: string
+  email?: string
 }
 
 export interface CreateAddressRequest {

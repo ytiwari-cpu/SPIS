@@ -1,56 +1,153 @@
 import { Router, Request, Response } from 'express'
-import { supabase, getAllFamilyIds } from '../lib/supabase.js'
+import { supabase } from '../lib/supabase.js'
 
 const router = Router()
 
+const IAM_SERVICE_URL = process.env.IAM_SERVICE_URL || 'http://localhost:3003'
+
+function normalizeNationalId(value: string): string {
+  return value.replace(/\D/g, '')
+}
+
 /**
- * DEV MODE: Login with family_id
- * In production, this would use proper authentication
- * For development, we allow login by simply providing a family_id
+ * Call IAM service to authenticate with national_id + password.
+ * Returns JWT token + user info on success.
+ */
+async function authenticateWithIAM(
+  nationalId: string,
+  password: string,
+): Promise<{ ok: boolean; data?: Record<string, unknown>; error?: string }> {
+  try {
+    const response = await fetch(`${IAM_SERVICE_URL}/iam/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ national_id: nationalId, password }),
+    })
+
+    const json = await response.json() as Record<string, unknown>
+
+    if (!response.ok) {
+      const errObj = json.error as Record<string, unknown> | undefined
+      return {
+        ok: false,
+        error: String(errObj?.message || json.message || 'Authentication failed'),
+      }
+    }
+
+    return { ok: true, data: json.data as Record<string, unknown> }
+  } catch (err) {
+    return {
+      ok: false,
+      error: `IAM service unavailable: ${(err as Error).message}`,
+    }
+  }
+}
+
+/**
+ * POST /api/v1/auth/login
+ *
+ * Authenticate with national_id + password via IAM service.
  */
 router.post('/login', async (req: Request, res: Response) => {
   try {
-    const { family_id } = req.body
+    const { national_id, password } = req.body as {
+      national_id?: string
+      password?: string
+    }
 
-    if (!family_id) {
+    if (!national_id || !password) {
       return res.status(400).json({
         success: false,
-        error: 'family_id is required',
+        error: 'national_id and password are required',
       })
     }
+      const cleanNationalId = normalizeNationalId(national_id)
+      if (cleanNationalId.length !== 14) {
+        return res.status(400).json({
+          success: false,
+          error: 'national_id must contain exactly 14 digits',
+        })
+      }
 
-    // Verify family exists in database
-    // Note: family_id is the human-readable code (F1, F2, etc.)
-    // uuid is the internal UUID for API calls
-    const { data: family, error } = await supabase
-      .from('family')
-      .select('uuid, family_id, status, registration_status, created_at, household_size')
-      .eq('family_id', family_id)
-      .single()
+      // 1. Authenticate via IAM service first
+      const tokenResult = await authenticateWithIAM(cleanNationalId, password)
+      if (!tokenResult.ok || !tokenResult.data) {
+        return res.status(401).json({
+          success: false,
+          error: tokenResult.error || 'Invalid credentials',
+        })
+      }
 
-    if (error || !family) {
-      return res.status(404).json({
-        success: false,
-        error: 'Family not found',
-        details: error?.message,
+      // 2. Check if user is a worker (SuperAdmin, Admin, CaseWorker) - they don't need family
+      const roles = (tokenResult.data.roles as string[]) || []
+      const isWorker = roles.some(role => 
+        role === 'SuperAdmin' || role === 'Admin' || role === 'CaseWorker' || role === 'ProgrammeManager'
+      )
+
+      if (isWorker) {
+        // Workers don't have family records - return just the auth token
+        return res.json({
+          success: true,
+          data: {
+            auth_mode: 'iam_national_id',
+            national_id: cleanNationalId,
+            access_token: tokenResult.data.access_token,
+            user_id: tokenResult.data.user_id,
+            email: tokenResult.data.email,
+            roles: tokenResult.data.roles,
+            is_worker: true,
+          },
+        })
+      }
+
+      // 3. For Citizens: Look up member in family DB to get family info
+      const { data: member, error: memberError } = await supabase
+        .from('family_member')
+        .select('*')
+        .eq('national_id', cleanNationalId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (memberError || !member) {
+        return res.status(404).json({
+          success: false,
+          error: 'No family registration found for this user. Please register your family first.',
+        })
+      }
+
+      // 4. Look up family
+      const { data: family, error: familyError } = await supabase
+        .from('family')
+        .select('*')
+        .eq('uuid', member.family_uuid)
+        .single()
+
+      if (familyError || !family) {
+        return res.status(404).json({
+          success: false,
+          error: 'Family not found for authenticated member',
+        })
+      }
+      return res.json({
+        success: true,
+        data: {
+          uuid: family.uuid,
+          family_id: family.family_id,
+          status: family.status,
+          registration_status: family.registration_status,
+          household_size: family.household_size,
+          created_at: family.created_at,
+          auth_mode: 'iam_national_id',
+          national_id: cleanNationalId,
+          access_token: tokenResult.data.access_token,
+          token_type: tokenResult.data.token_type,
+          expires_in: tokenResult.data.expires_in,
+          roles: tokenResult.data.roles,
+          permissions: tokenResult.data.permissions,
+          user_id: tokenResult.data.user_id,
+        },
       })
-    }
-
-    // In dev mode, we just return the family data as "session"
-    // In production, this would create a proper JWT token
-    return res.json({
-      success: true,
-      data: {
-        uuid: family.uuid,  // Internal UUID for API calls
-        family_id: family.family_id,  // Human-readable code for display
-        status: family.status,
-        registration_status: family.registration_status,
-        household_size: family.household_size,
-        created_at: family.created_at,
-        // Dev mode indicator
-        auth_mode: 'dev_family_id',
-      },
-    })
   } catch (error) {
     console.error('Auth login error:', error)
     return res.status(500).json({
@@ -61,22 +158,95 @@ router.post('/login', async (req: Request, res: Response) => {
 })
 
 /**
- * Get current session/family info
- * In dev mode, family_id is passed in header
+ * Get current session/family info.
+ * For Citizens: returns family info via JWT token (national_id claim) or X-Family-ID header.
+ * For Workers: returns user info from JWT without family data.
  */
 router.get('/me', async (req: Request, res: Response) => {
   try {
-    const familyId = req.headers['x-family-id'] as string
+    let familyUuid: string | null = null
+    let memberNationalId: string | null = null
+    let jwtPayload: Record<string, unknown> | null = null
 
-    if (!familyId) {
+    // 1. Try JWT token first — extract payload
+    const authHeader = req.headers.authorization
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        // Decode JWT payload (already verified by middleware if protected,
+        // but /auth/* is public so we decode manually here)
+        const token = authHeader.slice(7)
+        const payloadB64 = token.split('.')[1]
+        if (payloadB64) {
+          jwtPayload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString())
+          if (jwtPayload?.national_id) {
+            memberNationalId = jwtPayload.national_id as string
+          }
+        }
+      } catch {
+        // ignore decode errors
+      }
+    }
+
+    // 2. Check if user is a worker (SuperAdmin, Admin, CaseWorker, ProgrammeManager)
+    if (jwtPayload) {
+      const roles = (jwtPayload.roles as string[]) || []
+      const isWorker = roles.some(role => 
+        role === 'SuperAdmin' || role === 'Admin' || role === 'CaseWorker' || role === 'ProgrammeManager'
+      )
+
+      if (isWorker) {
+        // Workers don't have family records - return user info from JWT
+        return res.json({
+          success: true,
+          data: {
+            user_id: jwtPayload.sub,
+            email: jwtPayload.email,
+            roles: jwtPayload.roles,
+            permissions: jwtPayload.permissions,
+            is_worker: true,
+          },
+        })
+      }
+    }
+
+    // 3. For Citizens: Look up member by national_id from JWT
+    if (memberNationalId) {
+      const { data: member } = await supabase
+        .from('family_member')
+        .select('family_uuid')
+        .eq('national_id', memberNationalId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (member) {
+        familyUuid = member.family_uuid
+      }
+    }
+
+    // 4. Fallback: X-Family-ID header (human-readable family_id)
+    if (!familyUuid) {
+      const familyIdHeader = req.headers['x-family-id'] as string
+      if (familyIdHeader) {
+        const { data: fam } = await supabase
+          .from('family')
+          .select('uuid')
+          .eq('family_id', familyIdHeader)
+          .single()
+        if (fam) {
+          familyUuid = fam.uuid
+        }
+      }
+    }
+
+    if (!familyUuid) {
       return res.status(401).json({
         success: false,
-        error: 'Not authenticated. Provide X-Family-ID header.',
+        error: 'Not authenticated or no family found.',
       })
     }
 
-    // Get family with head member info
-    // Note: X-Family-ID header contains the human-readable family_id (F1, F2, etc.)
+    // 4. Fetch full family record
     const { data: family, error } = await supabase
       .from('family')
       .select(`
@@ -95,7 +265,7 @@ router.get('/me', async (req: Request, res: Response) => {
         created_at,
         updated_at
       `)
-      .eq('family_id', familyId)
+      .eq('uuid', familyUuid)
       .single()
 
     if (error || !family) {
@@ -105,7 +275,6 @@ router.get('/me', async (req: Request, res: Response) => {
       })
     }
 
-    // Get head of household (use family_uuid to find members)
     const { data: headMember } = await supabase
       .from('family_member')
       .select('uuid, member_id, first_name, last_name, national_id')
@@ -129,37 +298,6 @@ router.get('/me', async (req: Request, res: Response) => {
   }
 })
 
-/**
- * DEV ONLY: List all available family IDs for quick login
- */
-router.get('/families', async (_req: Request, res: Response) => {
-  try {
-    if (process.env.NODE_ENV === 'production') {
-      return res.status(403).json({
-        success: false,
-        error: 'This endpoint is disabled in production',
-      })
-    }
-
-    const result = await getAllFamilyIds()
-
-    if (!result.success) {
-      return res.status(500).json(result)
-    }
-
-    return res.json(result)
-  } catch (error) {
-    console.error('List families error:', error)
-    return res.status(500).json({
-      success: false,
-      error: 'Internal server error',
-    })
-  }
-})
-
-/**
- * Logout (dev mode - just acknowledgment)
- */
 router.post('/logout', async (_req: Request, res: Response) => {
   return res.json({
     success: true,

@@ -13,8 +13,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
-
-const API_BASE = 'http://localhost:3001/api/v1'
+import { authFetch } from '@/services/authFetch'
 
 interface MemberDB {
   uuid: string                              // Internal UUID
@@ -113,7 +112,7 @@ export default function MemberProfile() {
 
       try {
         // Use uuid for API calls (internal identifier)
-        const res = await fetch(`${API_BASE}/families/${user.uuid}`)
+        const res = await authFetch(`/families/${user.uuid}`)
         const data = await res.json()
 
         if (data.success && data.data) {
@@ -145,7 +144,7 @@ export default function MemberProfile() {
       if (!member) return
       
       try {
-        const res = await fetch(`${API_BASE}/documents/member/${member.uuid}`)
+        const res = await authFetch(`/documents/member/${member.uuid}`)
         const data = await res.json()
         if (data.success && Array.isArray(data.data)) {
           const photo = data.data.find((d: { document_type: string; file_url?: string }) => d.document_type === 'profile_photo')

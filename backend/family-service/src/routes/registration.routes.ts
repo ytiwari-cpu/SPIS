@@ -828,6 +828,47 @@ router.post('/family/:familyUuid/save-edits', async (req: Request, res: Response
 // Everything else links TO the family, not the other way around.
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════════
+// CHECK NATIONAL ID — used before family creation to prevent duplicates
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/v1/registration/check-national-id/:nationalId
+ *
+ * Returns whether any family_member already has this national_id.
+ * Used on the family registration page to block duplicates.
+ */
+router.get('/check-national-id/:nationalId', async (req: Request, res: Response) => {
+  try {
+    const { nationalId } = req.params
+    const cleanNid = nationalId.replace(/\D/g, '')
+
+    if (cleanNid.length !== 14) {
+      return res.status(400).json({ success: false, error: 'National ID must be exactly 14 digits' })
+    }
+
+    const { data: existingMember } = await supabase
+      .from('family_member')
+      .select('uuid, first_name, last_name, family_uuid')
+      .eq('national_id', cleanNid)
+      .limit(1)
+      .maybeSingle()
+
+    if (existingMember) {
+      return res.json({
+        success: true,
+        exists: true,
+        message: 'A family member with this National ID already exists.',
+      })
+    }
+
+    return res.json({ success: true, exists: false })
+  } catch (err) {
+    console.error('Check national_id error:', err)
+    return res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
 /**
  * POST /api/v1/registration/family
  * 
@@ -835,7 +876,7 @@ router.post('/family/:familyUuid/save-edits', async (req: Request, res: Response
  * Returns family_id which is used for all subsequent operations.
  * Status: DRAFT (UPPERCASE)
  * 
- * Required: household_size, head_first_name, head_last_name
+ * Required: household_size, head_first_name, head_last_name, head_national_id
  * Optional: phone, email, intake_channel (defaults to 'web_portal')
  * 
  * NOTE: NO permanent_address_id - we use polymorphic address table
@@ -848,6 +889,7 @@ router.post('/family', async (req: Request, res: Response) => {
       intake_channel,
       head_first_name,
       head_last_name,
+      head_national_id,
       phone,
       email,
       geo_code,
@@ -866,6 +908,37 @@ router.post('/family', async (req: Request, res: Response) => {
       return res.status(400).json({
         success: false,
         error: 'head_first_name and head_last_name are required (primary contact)',
+      })
+    }
+
+    // Head national_id is required and must be unique
+    if (!head_national_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'head_national_id is required for the head of household',
+      })
+    }
+
+    const cleanHeadNid = head_national_id.replace(/\D/g, '')
+    if (cleanHeadNid.length !== 14) {
+      return res.status(400).json({
+        success: false,
+        error: 'Head National ID must be exactly 14 digits',
+      })
+    }
+
+    // Check if a member with this national_id already exists
+    const { data: existingMember } = await supabase
+      .from('family_member')
+      .select('uuid, first_name, last_name, family_uuid')
+      .eq('national_id', cleanHeadNid)
+      .limit(1)
+      .maybeSingle()
+
+    if (existingMember) {
+      return res.status(409).json({
+        success: false,
+        error: `A family already exists with a member using this National ID. Registration is not allowed.`,
       })
     }
 
@@ -1397,6 +1470,9 @@ router.post('/family/:familyUuid/members', async (req: Request, res: Response) =
       entity_id: member.uuid,
       entity_type: 'MEMBER',
       data: {
+        national_id: member.national_id || null,
+        email: member.email || null,
+        phone: member.phone || null,
         first_name: member.first_name,
         last_name: member.last_name,
         relationship_to_head: member.relationship_to_head,
@@ -1920,16 +1996,16 @@ router.post('/family/:familyUuid/submit', async (req: Request, res: Response) =>
       })
     }
 
-    // Validate member count
+    // Validate member count — auto-update household_size to actual count
     const { count: memberCount } = await supabase
       .from('family_member')
       .select('*', { count: 'exact', head: true })
       .eq('family_uuid', familyUuid)
 
-    if ((memberCount || 0) !== family.household_size) {
+    if ((memberCount || 0) < 1) {
       return res.status(400).json({
         success: false,
-        error: `Cannot submit. Member count (${memberCount}) does not match household_size (${family.household_size})`,
+        error: 'Cannot submit. At least one family member is required.',
       })
     }
 
@@ -1948,15 +2024,17 @@ router.post('/family/:familyUuid/submit', async (req: Request, res: Response) =>
       })
     }
 
-    // Update to SUBMITTED (UPPERCASE)
+    // Update to SUBMITTED (UPPERCASE) and sync household_size to actual member count
     const oldStatus = family.registration_status
     const submittedAt = new Date().toISOString()
+    const actualMemberCount = memberCount || 1
     
     const { data: updatedFamily, error: updateError } = await supabase
       .from('family')
       .update({
         registration_status: 'SUBMITTED', // UPPERCASE
         submitted_at: submittedAt,
+        household_size: actualMemberCount,  // Sync to actual members
       })
       .eq('uuid', familyUuid)
       .select()
@@ -2210,6 +2288,9 @@ router.post('/family/:familyUuid/members/add', async (req: Request, res: Respons
       entity_id: member.uuid,
       entity_type: 'MEMBER',
       data: {
+        national_id: member.national_id || null,
+        email: member.email || null,
+        phone: member.phone || null,
         first_name: member.first_name,
         last_name: member.last_name,
         change_type: change_type || 'OTHER',

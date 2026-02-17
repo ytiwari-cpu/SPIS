@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import type { AuthSession, DbFamily, DbFamilyMember } from '@/types/database'
 
 interface AuthState {
@@ -18,6 +18,8 @@ interface AuthState {
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
   clearError: () => void
+  hasPermission: (permission: string) => boolean
+  hasRole: (role: string) => boolean
   
   // Legacy compatibility - uuid for routing, family_id for display
   user: { uuid: string; family_id: string; name: string } | null
@@ -37,7 +39,6 @@ export const useAuthStore = create<AuthState>()(
 
       // Login with session from API
       login: (session) => {
-        localStorage.setItem('spis-auth', JSON.stringify(session))
         set({
           isAuthenticated: true,
           session,
@@ -64,7 +65,6 @@ export const useAuthStore = create<AuthState>()(
 
       // Logout - clear all auth state
       logout: () => {
-        localStorage.removeItem('spis-auth')
         set({
           isAuthenticated: false,
           session: null,
@@ -78,30 +78,28 @@ export const useAuthStore = create<AuthState>()(
       setLoading: (loading) => set({ isLoading: loading }),
       setError: (error) => set({ error, isLoading: false }),
       clearError: () => set({ error: null }),
+
+      // Permission & role checks
+      hasPermission: (permission) => {
+        const state = useAuthStore.getState()
+        const permissions = state.session?.permissions || []
+        return permissions.includes(permission)
+      },
+
+      hasRole: (role) => {
+        const state = useAuthStore.getState()
+        const roles = state.session?.roles || []
+        return roles.includes(role)
+      },
     }),
     {
       name: 'spis-auth-storage',
+      storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({
         isAuthenticated: state.isAuthenticated,
         session: state.session,
         user: state.user,
       }),
-      // Migration: clear old sessions that don't have uuid
-      onRehydrateStorage: () => (state) => {
-        if (state?.session && !state.session.uuid) {
-          console.warn('Session missing uuid, clearing old session format. Please log in again.')
-          localStorage.removeItem('spis-auth')
-          localStorage.removeItem('spis-auth-storage')
-          state.isAuthenticated = false
-          state.session = null
-          state.user = null
-        }
-        if (state?.user && !state.user.uuid) {
-          console.warn('User missing uuid, clearing old user format.')
-          state.user = null
-          state.isAuthenticated = false
-        }
-      },
     }
   )
 )
@@ -118,8 +116,4 @@ export const useFamilyId = () => {
   return session?.family_id || null
 }
 
-// Helper hook to check if dev mode
-export const useIsDevMode = () => {
-  // @ts-expect-error - Vite injects import.meta.env
-  return import.meta.env?.DEV || import.meta.env?.MODE === 'development' || true
-}
+

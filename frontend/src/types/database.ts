@@ -28,7 +28,7 @@ export type AddressInsert = Partial<Omit<DbAddress, 'address_id'>>
 // Post-migration 006: uuid is internal, family_id is human-readable (F123)
 // ────────────────────────────────────────────────────────────────────────────
 export type FamilyStatus = 'active' | 'inactive' | 'suspended' | 'archived'
-export type RegistrationStatus = 'draft' | 'pending_verification' | 'verified' | 'rejected'
+export type RegistrationStatus = 'draft' | 'pending_verification' | 'verified' | 'rejected' | 'DRAFT' | 'SUBMITTED' | 'VERIFIED' | 'REJECTED'
 export type IntakeChannel = 'field_registration' | 'web_portal' | 'mobile_app' | 'bulk_import' | 'migration'
 
 export interface DbFamily {
@@ -83,7 +83,7 @@ export type FamilyMemberInsert = Omit<DbFamilyMember, 'uuid' | 'member_id' | 'cr
 // ────────────────────────────────────────────────────────────────────────────
 export type OwnerType = 'family' | 'member'
 export type DocumentType = 'national_id' | 'birth_certificate' | 'marriage_certificate' | 'death_certificate' | 'proof_of_address' | 'income_statement' | 'photo' | 'other'
-export type DocumentStatus = 'pending' | 'verified' | 'rejected'
+export type DocumentStatus = 'uploaded' | 'pending' | 'verified' | 'rejected'
 
 export interface DbDocument {
   document_id: string
@@ -213,16 +213,15 @@ export interface AuthSession {
   registration_status: RegistrationStatus | null
   household_size: number | null
   created_at: string
-  auth_mode: 'dev_family_id' | 'production'
-}
-
-// For dev mode - list of families for quick login
-export interface FamilyListItem {
-  uuid: string                              // Internal UUID
-  family_id: string                         // Human-readable ID (F123)
-  status: FamilyStatus | null
-  registration_status: RegistrationStatus | null
-  created_at: string
+  auth_mode: 'production' | 'iam_national_id'
+  national_id?: string
+  access_token?: string
+  refresh_token?: string
+  token_type?: string
+  expires_in?: number
+  roles?: string[]
+  permissions?: string[]
+  user_id?: string
 }
 
 export interface FamilyWithHead extends DbFamily {

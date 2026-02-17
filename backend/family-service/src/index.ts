@@ -5,7 +5,7 @@ import helmet from 'helmet'
 import morgan from 'morgan'
 
 import { familyRouter } from './routes/family.routes.js'
-import { memberRouter } from './routes/member.routes.js'
+import { memberRouter, publicMemberRouter } from './routes/member.routes.js'
 import { addressRouter } from './routes/address.routes.js'
 import { documentRouter } from './routes/document.routes.js'
 import { devRouter } from './routes/dev.routes.js'
@@ -14,6 +14,7 @@ import { registrationRouter } from './routes/registration.routes.js'
 import { uploadRouter } from './routes/upload.routes.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { notFound } from './middleware/notFound.js'
+import { requireAuth } from './middleware/requireAuth.js'
 import { testConnection } from './lib/supabase.js'
 
 const app = express()
@@ -36,7 +37,7 @@ app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true }))
 
 // Health check with DB connection test
-app.get('/health', async (_req: Request, res: Response) => {
+const healthHandler = async (_req: Request, res: Response) => {
   const dbStatus = await testConnection()
   res.json({
     status: dbStatus.success ? 'ok' : 'degraded',
@@ -44,16 +45,21 @@ app.get('/health', async (_req: Request, res: Response) => {
     database: dbStatus.success ? 'connected' : dbStatus.error,
     timestamp: new Date().toISOString(),
   })
-})
+}
+app.get('/health', healthHandler)
+app.get('/healthz', healthHandler)
 
-// API Routes
+// ─── Public routes (no auth required) ─────────────────────────────────────
 app.use('/api/v1/auth', authRouter)
-app.use('/api/v1/registration', registrationRouter)  // NEW: DB-driven registration flow
-app.use('/api/v1/upload', uploadRouter)              // NEW: File upload routes
-app.use('/api/v1/families', familyRouter)
-app.use('/api/v1/members', memberRouter)
-app.use('/api/v1/addresses', addressRouter)
-app.use('/api/v1/documents', documentRouter)
+app.use('/api/v1/registration', registrationRouter)
+app.use('/api/v1/upload', uploadRouter)
+app.use('/api/v1/public/members', publicMemberRouter) // Public member lookup for IAM service
+
+// ─── Protected routes (JWT required) ─────────────────────────────────────
+app.use('/api/v1/families', requireAuth, familyRouter)
+app.use('/api/v1/members', requireAuth, memberRouter) // Protected member routes
+app.use('/api/v1/addresses', requireAuth, addressRouter)
+app.use('/api/v1/documents', requireAuth, documentRouter)
 
 // DEV-ONLY routes
 if (process.env.NODE_ENV !== 'production') {

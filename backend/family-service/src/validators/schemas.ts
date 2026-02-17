@@ -44,7 +44,7 @@ export const OwnerTypeSchema = z.enum(['FAMILY', 'MEMBER'])
 // ============ MEMBER SCHEMAS ============
 
 export const CreateMemberSchema = z.object({
-  family_id: z.string().uuid(),
+  family_uuid: z.string().uuid(),
   national_id: NationalIdSchema,
   first_name: z.string().min(1).max(100),
   last_name: z.string().min(1).max(100),

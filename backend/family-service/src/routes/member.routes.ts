@@ -3,9 +3,15 @@ import { supabase } from '../lib/supabase.js'
 import { validate } from '../middleware/validate.js'
 import { NotFoundError, BadRequestError } from '../middleware/errorHandler.js'
 import { CreateMemberSchema, UpdateMemberSchema } from '../validators/schemas.js'
+import { publishEvent } from '../services/eventService.js'
 import type { CreateMemberRequest, UpdateMemberRequest } from '../types/index.js'
 
 export const memberRouter = Router()
+export const publicMemberRouter = Router() // For IAM service lookups (no auth required)
+
+function normalizeNationalId(value: string): string {
+  return value.replace(/\D/g, '')
+}
 
 /**
  * Log member changes to family_history
@@ -68,6 +74,79 @@ memberRouter.get('/family/:familyId', async (req: Request, res: Response, next: 
     res.json({
       success: true,
       data: data || [],
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
+/**
+ * GET /api/v1/members/lookup?national_id=...
+ * Lookup member identity details for IAM password reset/login flows.
+ * PUBLIC ENDPOINT - No auth required (used by IAM service)
+ */
+publicMemberRouter.get('/lookup', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const nationalIdRaw = typeof req.query.national_id === 'string'
+      ? req.query.national_id
+      : ''
+    const nationalId = normalizeNationalId(nationalIdRaw)
+
+    if (!nationalId || nationalId.length !== 14) {
+      return res.status(400).json({
+        success: false,
+        error: 'national_id is required and must be exactly 14 digits',
+      })
+    }
+
+    const { data: member, error: memberError } = await supabase
+      .from('family_member')
+      .select('*')
+      .eq('national_id', nationalId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (memberError) {
+      return res.status(400).json({
+        success: false,
+        error: memberError.message,
+      })
+    }
+
+    if (!member) {
+      return res.status(404).json({
+        success: false,
+        error: 'Member not found for provided national_id',
+      })
+    }
+
+    const { data: family } = await supabase
+      .from('family')
+      .select('*')
+      .eq('uuid', member.family_uuid)
+      .maybeSingle()
+
+    // Preferred link: member UUID. If unavailable, fallback to national ID.
+    const registryId = member.uuid || nationalId
+    const email = member.email || family?.email || null
+    const phone = member.phone || family?.phone || null
+
+    res.json({
+      success: true,
+      registry_id: registryId,
+      family_uuid: member.family_uuid || null,
+      family_id: family?.family_id || null,
+      member_uuid: member.uuid || null,
+      member_id: member.member_id || null,
+      national_id: member.national_id || nationalId,
+      email,
+      phone,
+      first_name: member.first_name || null,
+      last_name: member.last_name || null,
+      member_status: member.member_status || null,
+      family_status: family?.status || null,
+      registration_status: family?.registration_status || null,
     })
   } catch (error) {
     next(error)
@@ -169,6 +248,8 @@ memberRouter.post('/', validate(CreateMemberSchema), async (req: Request, res: R
         current_address_id: body.current_address_id || null,
         alive_flag: body.alive_flag ?? true,
         marital_status: body.marital_status || null,
+        phone: body.phone || null,
+        email: body.email || null,
       })
       .select()
       .single()
@@ -201,6 +282,20 @@ memberRouter.post('/', validate(CreateMemberSchema), async (req: Request, res: R
       member,
       `Member ${member.first_name} ${member.last_name} added`
     )
+
+    await publishEvent('member.added', {
+      family_id: body.family_uuid,
+      entity_id: member.uuid,
+      entity_type: 'MEMBER',
+      data: {
+        national_id: member.national_id || null,
+        email: member.email || null,
+        phone: member.phone || null,
+        first_name: member.first_name || null,
+        last_name: member.last_name || null,
+      },
+      triggered_by: changedBy,
+    })
 
     res.status(201).json({
       success: true,
@@ -275,6 +370,20 @@ memberRouter.patch('/:id', validate(UpdateMemberSchema), async (req: Request, re
       member,
       `Member ${member.first_name} ${member.last_name} updated`
     )
+
+    await publishEvent('member.updated', {
+      family_id: oldMember.family_uuid,
+      entity_id: member.uuid,
+      entity_type: 'MEMBER',
+      data: {
+        national_id: member.national_id || null,
+        email: member.email || null,
+        phone: member.phone || null,
+        first_name: member.first_name || null,
+        last_name: member.last_name || null,
+      },
+      triggered_by: changedBy,
+    })
 
     res.json({
       success: true,
@@ -360,6 +469,19 @@ memberRouter.delete('/:id', async (req: Request, res: Response, next: NextFuncti
       null,
       hardDelete ? `Member ${member.first_name} ${member.last_name} permanently deleted` : `Member ${member.first_name} ${member.last_name} marked as deceased`
     )
+
+    await publishEvent(hardDelete ? 'member.deleted' : 'member.removed', {
+      family_id: member.family_uuid,
+      entity_id: member.uuid,
+      entity_type: 'MEMBER',
+      data: {
+        national_id: member.national_id || null,
+        email: member.email || null,
+        phone: member.phone || null,
+        reason: hardDelete ? 'hard_delete' : 'marked_inactive',
+      },
+      triggered_by: changedBy,
+    })
 
     res.json({
       success: true,

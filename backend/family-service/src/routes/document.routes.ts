@@ -23,13 +23,10 @@ documentRouter.get('/family/:familyId', async (req: Request, res: Response, next
 
     const { data, error } = await supabase
       .from('documents')
-      .select(`
-        *,
-        document_verification (*)
-      `)
+      .select('*')
       .eq('owner_type', 'FAMILY')
       .eq('owner_id', familyId)
-      .order('created_at', { ascending: false })
+      .order('uploaded_at', { ascending: false })
 
     if (error) {
       return res.status(400).json({
@@ -57,13 +54,10 @@ documentRouter.get('/member/:memberId', async (req: Request, res: Response, next
 
     const { data, error } = await supabase
       .from('documents')
-      .select(`
-        *,
-        document_verification (*)
-      `)
+      .select('*')
       .eq('owner_type', 'MEMBER')
       .eq('owner_id', memberId)
-      .order('created_at', { ascending: false })
+      .order('uploaded_at', { ascending: false })
 
     if (error) {
       return res.status(400).json({
@@ -91,10 +85,7 @@ documentRouter.get('/:id', async (req: Request, res: Response, next: NextFunctio
 
     const { data: document, error } = await supabase
       .from('documents')
-      .select(`
-        *,
-        document_verification (*)
-      `)
+      .select('*')
       .eq('document_id', id)
       .single()
 
