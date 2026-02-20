@@ -16,6 +16,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import AddressAutocomplete from '@/components/AddressAutocomplete'
+import { authFetch } from '@/services/authFetch'
 
 const API_BASE = 'http://localhost:3001/api/v1'
 
@@ -191,7 +192,7 @@ export default function FamilyEdit() {
 
     try {
       setIsLoading(true)
-      const response = await fetch(`${API_BASE}/families/${familyId}`)
+      const response = await authFetch(`/families/${familyId}`)
       const data = await response.json()
 
       if (!data.success) {
@@ -342,12 +343,8 @@ export default function FamilyEdit() {
     setError(null)
 
     try {
-      const response = await fetch(`${API_BASE}/registration/family/${familyId}/save-edits`, {
+      const response = await authFetch(`/registration/family/${familyId}/save-edits`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user?.uuid || 'system',
-        },
         body: JSON.stringify({
           ...pendingChanges,
           reason: saveReason,

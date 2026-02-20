@@ -11,12 +11,19 @@
 // ═══════════════════════════════════════════════════════════════
 export interface DbAddress {
   address_id: string
-  address_type: string | null  // 'permanent', 'current', etc.
+  address_type: string | null  // 'PERMANENT', 'CURRENT', 'MAILING'
+  entity_type: string | null   // 'FAMILY', 'MEMBER'
+  entity_id: string | null
   line1: string | null
   line2: string | null
-  parish: string | null        // Note: not 'city' but 'parish'
-  district: string | null      // Note: not 'region' but 'district'
+  parish: string | null
+  district: string | null
   geo_code: string | null
+  lot_apt: string | null               // Lot/Apt/P.O. Box
+  street_district: string | null       // Street/District
+  post_office: string | null           // Post Office/Postal Agency
+  post_code: string | null             // Post Code
+  area_type: string | null             // 'KMA', 'other_town', 'rural'
   valid_from: string | null
   valid_to: string | null
 }
@@ -41,6 +48,18 @@ export interface DbFamily {
   registration_status: string | null        // 'draft', 'pending_verification', 'verified', 'rejected'
   submitted_at: string | null
   verified_at: string | null
+  // Migration 010: Registration form upgrade
+  programme: string | null                  // 'PATH', 'other'
+  payment_option: string | null             // 'KCC', 'cheque'
+  social_worker_zone: string | null
+  social_worker_code: string | null
+  application_no: string | null
+  constituency_code: string | null
+  head_middle_names: string | null
+  head_alias: string | null
+  head_mothers_maiden_name: string | null
+  mailing_address_different: boolean | null
+  directions_to_house: string | null
   created_at: string
   updated_at: string | null
 }
@@ -65,6 +84,42 @@ export interface DbFamilyMember {
   current_address_id: string | null
   alive_flag: boolean | null
   marital_status: string | null             // 'single', 'married', 'divorced', etc.
+  // Migration 010: Extended fields
+  middle_names: string | null
+  alias: string | null
+  order_number: number | null
+  trn: string | null                        // Tax Registration Number
+  nis_no: string | null                     // NIS Number
+  id_type: string | null                    // 'drivers_license','passport','voters_id','senior_citizen_id','none'
+  id_number: string | null
+  birth_entry_number: string | null
+  mothers_maiden_name: string | null
+  is_twin: boolean | null
+  occupation: string | null
+  contact_no_1: string | null
+  contact_no_2: string | null
+  union_status: string | null               // 'married','common_law','divorced','separated','widowed','visiting','single','none'
+  last_school_completed: string | null       // 'completed_primary','some_secondary', etc.
+  school_name: string | null
+  school_code: string | null
+  school_grade: string | null
+  school_class: string | null
+  school_shift: string | null
+  pregnant: string | null                    // 'yes','no','lactating'
+  pregnancy_due_date: string | null
+  is_disabled: boolean | null
+  is_mentally_ill: boolean | null
+  is_chronically_ill: boolean | null
+  is_shut_in: boolean | null
+  is_nis_pensioner: boolean | null
+  pension_number: string | null
+  clinic_name: string | null
+  clinic_code: string | null
+  reg_doc_birth_cert: boolean | null
+  reg_doc_declaration: boolean | null
+  reg_doc_school_records: boolean | null
+  reg_doc_none: boolean | null
+  sex_code: number | null                    // 1=Male, 2=Female
   created_at: string
   updated_at: string | null
 }
@@ -197,3 +252,86 @@ export type AddressTypeType = typeof AddressType[number]
 
 export const OwnerType = ['family', 'member'] as const
 export type OwnerTypeType = typeof OwnerType[number]
+
+export const UnionStatus = ['married', 'common_law', 'divorced', 'separated', 'widowed', 'visiting', 'single', 'none'] as const
+export type UnionStatusType = typeof UnionStatus[number]
+
+export const IdType = ['drivers_license', 'passport', 'voters_id', 'senior_citizen_id', 'none'] as const
+export type IdTypeType = typeof IdType[number]
+
+export const LastSchoolCompleted = ['completed_primary', 'some_secondary', 'completed_secondary', 'post_secondary', 'tertiary', 'none'] as const
+export type LastSchoolCompletedType = typeof LastSchoolCompleted[number]
+
+export const PregnantStatus = ['yes', 'no', 'lactating'] as const
+export type PregnantStatusType = typeof PregnantStatus[number]
+
+export const AreaType = ['KMA', 'other_town', 'rural'] as const
+export type AreaTypeType = typeof AreaType[number]
+
+export const DwellingTenure = ['own', 'rent', 'lease', 'government_rent', 'live_rent_free', 'squat'] as const
+export type DwellingTenureType = typeof DwellingTenure[number]
+
+export const LightingSource = ['electricity', 'kerosene', 'other'] as const
+export type LightingSourceType = typeof LightingSource[number]
+
+export const Programme = ['PATH', 'other'] as const
+export type ProgrammeType = typeof Programme[number]
+
+export const PaymentOption = ['KCC', 'cheque'] as const
+export type PaymentOptionType = typeof PaymentOption[number]
+
+export const FamilyRelationship = ['head', 'spouse', 'son_daughter', 'grandchild', 'other_family', 'non_family'] as const
+export type FamilyRelationshipType = typeof FamilyRelationship[number]
+
+// ═══════════════════════════════════════════════════════════════
+// HOUSE_SERVICES TABLE
+// ═══════════════════════════════════════════════════════════════
+export interface DbHouseServices {
+  house_id: string
+  family_uuid: string
+  dwelling_tenure: string | null
+  own_house: boolean | null
+  own_house_count: number | null
+  house_insurance: boolean | null
+  has_landline: boolean | null
+  has_internet: boolean | null
+  lighting_source: string | null
+  pays_for_electricity: boolean | null
+  outer_wall_material: string | null
+  water_source: string | null
+  garbage_disposal: string | null
+  toilet_facility: string | null
+  toilet_count: number | null
+  toilet_exclusive_use: boolean | null
+  shared_households: number | null
+  drinking_water_source: string | null
+  rooms_occupied: number | null
+  kitchen_location: string | null
+  weekly_family_spending: number | null
+  head_has_resident_partner: boolean | null
+  has_laptop: boolean | null
+  has_desktop: boolean | null
+  has_washing_machine: boolean | null
+  has_refrigerator: boolean | null
+  has_gas_stove: boolean | null
+  has_electric_stove: boolean | null
+  has_car: boolean | null
+  has_fan: boolean | null
+  has_dvd_burner: boolean | null
+  has_dvd_player: boolean | null
+  has_stereo: boolean | null
+  has_video_equipment: boolean | null
+  has_air_conditioner: boolean | null
+  has_other_electrical: boolean | null
+  has_sewing_machine: boolean | null
+  has_motorcycle: boolean | null
+  has_water_heater: boolean | null
+  has_generator: boolean | null
+  has_scanner: boolean | null
+  has_dryer: boolean | null
+  created_at: string
+  updated_at: string | null
+}
+
+export type HouseServicesInsert = Omit<DbHouseServices, 'house_id' | 'created_at' | 'updated_at'>
+export type HouseServicesUpdate = Partial<Omit<HouseServicesInsert, 'family_uuid'>>

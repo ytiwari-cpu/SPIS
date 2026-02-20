@@ -1,0 +1,59 @@
+# Docker Compose for Keycloak
+# Run with: docker-compose -f docker-compose.keycloak.yml up -d
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: spis-keycloak
+    environment:
+      # Admin credentials
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      
+      # Database (uses embedded H2 for dev)
+      KC_DB: dev-mem
+      
+      # Features
+      KC_FEATURES: preview
+      
+      # HTTP settings (dev mode)
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      
+    ports:
+      - "8080:8080"
+    
+    command:
+      - start-dev
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    
+    volumes:
+      # Persist H2 database (optional for dev)
+      - keycloak_data:/opt/keycloak/data
+
+volumes:
+  keycloak_data:
+
+# Usage:
+# 
+# 1. Start Keycloak:
+#    docker-compose -f docker-compose.keycloak.yml up -d
+#
+# 2. Wait for startup (about 30 seconds)
+#
+# 3. Access admin console:
+#    http://localhost:8080/admin
+#    Username: admin
+#    Password: admin
+#
+# 4. Run setup script:
+#    cd backend/iam-service && node setup-keycloak.mjs
+#
+# 5. JWKS (Public Keys) will be available at:
+#    http://localhost:8080/realms/spis-dev/protocol/openid-connect/certs

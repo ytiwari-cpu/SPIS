@@ -1,14 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.SUPABASE_URL
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
+const supabaseUrl = process.env.FAMILY_SUPABASE_URL || process.env.SUPABASE_URL
+const supabaseServiceKey = process.env.FAMILY_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.FAMILY_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error('Missing Supabase environment variables: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY')
+  throw new Error('Missing Supabase environment variables: FAMILY_SUPABASE_URL and FAMILY_SUPABASE_SERVICE_ROLE_KEY')
 }
 
-if (process.env.SUPABASE_SERVICE_ROLE_KEY === process.env.SUPABASE_ANON_KEY) {
-  console.warn('Supabase service role key matches anon key. RLS will block server-side writes. Update SUPABASE_SERVICE_ROLE_KEY with the real service role key.')
+if (process.env.FAMILY_SUPABASE_SERVICE_ROLE_KEY === process.env.FAMILY_SUPABASE_ANON_KEY) {
+  console.warn('Supabase service role key matches anon key. RLS will block server-side writes. Update FAMILY_SUPABASE_SERVICE_ROLE_KEY with the real service role key.')
 }
 
 /**

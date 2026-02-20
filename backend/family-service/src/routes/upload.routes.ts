@@ -133,7 +133,7 @@ router.post('/family/:familyId/documents', upload.single('file'), async (req: Re
       file_name: file.originalname,
       mime_type: uploadResult.mime_type,
       file_size_bytes: uploadResult.file_size,
-      status: 'PENDING',
+      status: 'UPLOADED',
       uploaded_at: new Date().toISOString(),
       uploaded_by: isUuid(headerUserId) ? headerUserId : null,
     }
@@ -257,7 +257,7 @@ router.post('/member/:memberId/documents', upload.single('file'), async (req: Re
       file_name: file.originalname,
       mime_type: uploadResult.mime_type,
       file_size_bytes: uploadResult.file_size,
-      status: 'PENDING',
+      status: 'UPLOADED',
       uploaded_at: new Date().toISOString(),
       uploaded_by: isUuid(headerUserId) ? headerUserId : null,
     }

@@ -95,6 +95,22 @@ router.get('/family/:familyUuid', async (req: Request, res: Response) => {
       .eq('address_type', 'PERMANENT')
       .single()
 
+    // Get mailing address (Migration 010)
+    const { data: mailingAddress } = await supabase
+      .from('address')
+      .select('*')
+      .eq('entity_type', 'FAMILY')
+      .eq('entity_id', familyUuid)
+      .eq('address_type', 'MAILING')
+      .single()
+
+    // Get house services (Migration 010)
+    const { data: houseServices } = await supabase
+      .from('house_services')
+      .select('*')
+      .eq('family_uuid', familyUuid)
+      .single()
+
     // Get members (family_uuid references family.uuid)
     const { data: members } = await supabase
       .from('family_member')
@@ -129,6 +145,8 @@ router.get('/family/:familyUuid', async (req: Request, res: Response) => {
       data: {
         family,
         address,
+        mailing_address: mailingAddress || null,
+        house_services: houseServices || null,
         members: membersWithAddresses,
       },
     })
@@ -185,6 +203,18 @@ router.put('/family/:familyUuid', async (req: Request, res: Response) => {
     if (phone !== undefined) updateData.phone = phone
     if (email !== undefined) updateData.email = email
     if (vulnerability_flag !== undefined) updateData.vulnerability_flag = vulnerability_flag
+    // Migration 010: Extended family fields
+    if (req.body.programme !== undefined) updateData.programme = req.body.programme
+    if (req.body.payment_option !== undefined) updateData.payment_option = req.body.payment_option
+    if (req.body.social_worker_zone !== undefined) updateData.social_worker_zone = req.body.social_worker_zone
+    if (req.body.social_worker_code !== undefined) updateData.social_worker_code = req.body.social_worker_code
+    if (req.body.application_no !== undefined) updateData.application_no = req.body.application_no
+    if (req.body.constituency_code !== undefined) updateData.constituency_code = req.body.constituency_code
+    if (req.body.head_middle_names !== undefined) updateData.head_middle_names = req.body.head_middle_names
+    if (req.body.head_alias !== undefined) updateData.head_alias = req.body.head_alias
+    if (req.body.head_mothers_maiden_name !== undefined) updateData.head_mothers_maiden_name = req.body.head_mothers_maiden_name
+    if (req.body.mailing_address_different !== undefined) updateData.mailing_address_different = req.body.mailing_address_different
+    if (req.body.directions_to_house !== undefined) updateData.directions_to_house = req.body.directions_to_house
 
     const { data: family, error: updateError } = await supabase
       .from('family')
@@ -247,6 +277,12 @@ router.put('/family/:familyUuid/address', async (req: Request, res: Response) =>
     if (parish !== undefined) updateData.parish = parish
     if (district !== undefined) updateData.district = district
     if (geo_code !== undefined) updateData.geo_code = geo_code
+    // Migration 010: Extended address fields
+    if (req.body.lot_apt !== undefined) updateData.lot_apt = req.body.lot_apt
+    if (req.body.street_district !== undefined) updateData.street_district = req.body.street_district
+    if (req.body.post_office !== undefined) updateData.post_office = req.body.post_office
+    if (req.body.post_code !== undefined) updateData.post_code = req.body.post_code
+    if (req.body.area_type !== undefined) updateData.area_type = req.body.area_type
 
     const { data: address, error: updateError } = await supabase
       .from('address')
@@ -324,6 +360,41 @@ router.put('/family/:familyUuid/members/:memberUuid', async (req: Request, res: 
     if (alive_flag !== undefined) updateData.alive_flag = alive_flag
     if (phone !== undefined) updateData.phone = phone
     if (email !== undefined) updateData.email = email
+    // Migration 010: Extended member fields
+    if (req.body.middle_names !== undefined) updateData.middle_names = req.body.middle_names
+    if (req.body.alias !== undefined) updateData.alias = req.body.alias
+    if (req.body.trn !== undefined) updateData.trn = req.body.trn
+    if (req.body.nis_no !== undefined) updateData.nis_no = req.body.nis_no
+    if (req.body.id_type !== undefined) updateData.id_type = req.body.id_type
+    if (req.body.id_number !== undefined) updateData.id_number = req.body.id_number
+    if (req.body.birth_entry_number !== undefined) updateData.birth_entry_number = req.body.birth_entry_number
+    if (req.body.mothers_maiden_name !== undefined) updateData.mothers_maiden_name = req.body.mothers_maiden_name
+    if (req.body.is_twin !== undefined) updateData.is_twin = req.body.is_twin
+    if (req.body.order_number !== undefined) updateData.order_number = req.body.order_number
+    if (req.body.occupation !== undefined) updateData.occupation = req.body.occupation
+    if (req.body.contact_no_1 !== undefined) updateData.contact_no_1 = req.body.contact_no_1
+    if (req.body.contact_no_2 !== undefined) updateData.contact_no_2 = req.body.contact_no_2
+    if (req.body.union_status !== undefined) updateData.union_status = req.body.union_status
+    if (req.body.last_school_completed !== undefined) updateData.last_school_completed = req.body.last_school_completed
+    if (req.body.school_name !== undefined) updateData.school_name = req.body.school_name
+    if (req.body.school_parish !== undefined) updateData.school_parish = req.body.school_parish
+    if (req.body.school_attended_since !== undefined) updateData.school_attended_since = req.body.school_attended_since
+    if (req.body.pregnant !== undefined) updateData.pregnant = req.body.pregnant
+    if (req.body.pregnancy_due_date !== undefined) updateData.pregnancy_due_date = req.body.pregnancy_due_date
+    if (req.body.health_condition_disability !== undefined) updateData.health_condition_disability = req.body.health_condition_disability
+    if (req.body.health_visual_impairment !== undefined) updateData.health_visual_impairment = req.body.health_visual_impairment
+    if (req.body.health_hiv_aids !== undefined) updateData.health_hiv_aids = req.body.health_hiv_aids
+    if (req.body.health_other !== undefined) updateData.health_other = req.body.health_other
+    if (req.body.health_other_specify !== undefined) updateData.health_other_specify = req.body.health_other_specify
+    if (req.body.pension_number !== undefined) updateData.pension_number = req.body.pension_number
+    if (req.body.clinic_name !== undefined) updateData.clinic_name = req.body.clinic_name
+    if (req.body.clinic_parish !== undefined) updateData.clinic_parish = req.body.clinic_parish
+    if (req.body.clinic_number !== undefined) updateData.clinic_number = req.body.clinic_number
+    if (req.body.reg_doc_birth_certificate !== undefined) updateData.reg_doc_birth_certificate = req.body.reg_doc_birth_certificate
+    if (req.body.reg_doc_id !== undefined) updateData.reg_doc_id = req.body.reg_doc_id
+    if (req.body.reg_doc_other !== undefined) updateData.reg_doc_other = req.body.reg_doc_other
+    if (req.body.reg_doc_other_specify !== undefined) updateData.reg_doc_other_specify = req.body.reg_doc_other_specify
+    if (req.body.sex_code !== undefined) updateData.sex_code = req.body.sex_code
 
     const { data: member, error: updateError } = await supabase
       .from('family_member')
@@ -828,6 +899,47 @@ router.post('/family/:familyUuid/save-edits', async (req: Request, res: Response
 // Everything else links TO the family, not the other way around.
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════════
+// CHECK NATIONAL ID — used before family creation to prevent duplicates
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/v1/registration/check-national-id/:nationalId
+ *
+ * Returns whether any family_member already has this national_id.
+ * Used on the family registration page to block duplicates.
+ */
+router.get('/check-national-id/:nationalId', async (req: Request, res: Response) => {
+  try {
+    const { nationalId } = req.params
+    const cleanNid = nationalId.replace(/\D/g, '')
+
+    if (cleanNid.length !== 14) {
+      return res.status(400).json({ success: false, error: 'National ID must be exactly 14 digits' })
+    }
+
+    const { data: existingMember } = await supabase
+      .from('family_member')
+      .select('uuid, first_name, last_name, family_uuid')
+      .eq('national_id', cleanNid)
+      .limit(1)
+      .maybeSingle()
+
+    if (existingMember) {
+      return res.json({
+        success: true,
+        exists: true,
+        message: 'A family member with this National ID already exists.',
+      })
+    }
+
+    return res.json({ success: true, exists: false })
+  } catch (err) {
+    console.error('Check national_id error:', err)
+    return res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
 /**
  * POST /api/v1/registration/family
  * 
@@ -835,7 +947,7 @@ router.post('/family/:familyUuid/save-edits', async (req: Request, res: Response
  * Returns family_id which is used for all subsequent operations.
  * Status: DRAFT (UPPERCASE)
  * 
- * Required: household_size, head_first_name, head_last_name
+ * Required: household_size, head_first_name, head_last_name, head_national_id
  * Optional: phone, email, intake_channel (defaults to 'web_portal')
  * 
  * NOTE: NO permanent_address_id - we use polymorphic address table
@@ -848,6 +960,7 @@ router.post('/family', async (req: Request, res: Response) => {
       intake_channel,
       head_first_name,
       head_last_name,
+      head_national_id,
       phone,
       email,
       geo_code,
@@ -866,6 +979,37 @@ router.post('/family', async (req: Request, res: Response) => {
       return res.status(400).json({
         success: false,
         error: 'head_first_name and head_last_name are required (primary contact)',
+      })
+    }
+
+    // Head national_id is required and must be unique
+    if (!head_national_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'head_national_id is required for the head of household',
+      })
+    }
+
+    const cleanHeadNid = head_national_id.replace(/\D/g, '')
+    if (cleanHeadNid.length !== 14) {
+      return res.status(400).json({
+        success: false,
+        error: 'Head National ID must be exactly 14 digits',
+      })
+    }
+
+    // Check if a member with this national_id already exists
+    const { data: existingMember } = await supabase
+      .from('family_member')
+      .select('uuid, first_name, last_name, family_uuid')
+      .eq('national_id', cleanHeadNid)
+      .limit(1)
+      .maybeSingle()
+
+    if (existingMember) {
+      return res.status(409).json({
+        success: false,
+        error: `A family already exists with a member using this National ID. Registration is not allowed.`,
       })
     }
 
@@ -897,7 +1041,7 @@ router.post('/family', async (req: Request, res: Response) => {
 
     // Create family record with status=DRAFT (UPPERCASE)
     // NO history during draft - only on SUBMIT
-    const familyData = {
+    const familyData: Record<string, unknown> = {
       household_size,
       family_id: familyId,  // human-readable code (was family_code before migration 006)
       intake_channel: intake_channel || 'web_portal',
@@ -908,8 +1052,18 @@ router.post('/family', async (req: Request, res: Response) => {
       email: email || null,
       geo_code: geo_code || null,
       vulnerability_flag: vulnerability_flag || false,
-      // NO permanent_address_id - polymorphic address table handles this
-      // head_member_uuid set when first 'head' member is added
+      // Migration 010: Extended family fields
+      programme: req.body.programme || null,
+      payment_option: req.body.payment_option || null,
+      social_worker_zone: req.body.social_worker_zone || null,
+      social_worker_code: req.body.social_worker_code || null,
+      application_no: req.body.application_no || null,
+      constituency_code: req.body.constituency_code || null,
+      head_middle_names: req.body.head_middle_names || null,
+      head_alias: req.body.head_alias || null,
+      head_mothers_maiden_name: req.body.head_mothers_maiden_name || null,
+      mailing_address_different: req.body.mailing_address_different || false,
+      directions_to_house: req.body.directions_to_house || null,
     }
 
     const { data: family, error: familyError } = await supabase
@@ -1026,7 +1180,7 @@ router.post('/family/:familyUuid/address', async (req: Request, res: Response) =
     }
 
     // Create address record with POLYMORPHIC columns (UPPERCASE)
-    const addressData = {
+    const addressData: Record<string, unknown> = {
       entity_type: 'FAMILY',      // UPPERCASE
       entity_id: familyUuid,      // Links to family uuid
       address_type: 'PERMANENT',  // UPPERCASE
@@ -1035,6 +1189,11 @@ router.post('/family/:familyUuid/address', async (req: Request, res: Response) =
       parish: parish || null,
       district,
       geo_code: geo_code || null,
+      lot_apt: req.body.lot_apt || null,
+      street_district: req.body.street_district || null,
+      post_office: req.body.post_office || null,
+      post_code: req.body.post_code || null,
+      area_type: req.body.area_type || null,
       valid_from: valid_from || new Date().toISOString(),
     }
 
@@ -1313,7 +1472,7 @@ router.post('/family/:familyUuid/members', async (req: Request, res: Response) =
 
     // Create member record with new phone/email fields
     // NOTE: No current_address_id - polymorphic address table handles this
-    const memberData = {
+    const memberData: Record<string, unknown> = {
       family_uuid: familyUuid,
       member_id: memberId,  // human-readable code (was member_code before migration 006)
       national_id: national_id ? national_id.replace(/\D/g, '') : null, // Store digits only
@@ -1327,6 +1486,42 @@ router.post('/family/:familyUuid/members', async (req: Request, res: Response) =
       phone: phone || null,
       email: email || null,
       annual_income: req.body.annual_income || 0,
+      // Migration 010: Extended member fields
+      middle_names: req.body.middle_names || null,
+      alias: req.body.alias || null,
+      order_number: req.body.order_number || ((memberCount || 0) + 1),
+      trn: req.body.trn || null,
+      nis_no: req.body.nis_no || null,
+      id_type: req.body.id_type || null,
+      id_number: req.body.id_number || null,
+      birth_entry_number: req.body.birth_entry_number || null,
+      mothers_maiden_name: req.body.mothers_maiden_name || null,
+      is_twin: req.body.is_twin || false,
+      occupation: req.body.occupation || null,
+      contact_no_1: req.body.contact_no_1 || phone || null,
+      contact_no_2: req.body.contact_no_2 || null,
+      union_status: req.body.union_status || null,
+      last_school_completed: req.body.last_school_completed || null,
+      school_name: req.body.school_name || null,
+      school_code: req.body.school_code || null,
+      school_grade: req.body.school_grade || null,
+      school_class: req.body.school_class || null,
+      school_shift: req.body.school_shift || null,
+      pregnant: req.body.pregnant || null,
+      pregnancy_due_date: req.body.pregnancy_due_date || null,
+      is_disabled: req.body.is_disabled || false,
+      is_mentally_ill: req.body.is_mentally_ill || false,
+      is_chronically_ill: req.body.is_chronically_ill || false,
+      is_shut_in: req.body.is_shut_in || false,
+      is_nis_pensioner: req.body.is_nis_pensioner || false,
+      pension_number: req.body.pension_number || null,
+      clinic_name: req.body.clinic_name || null,
+      clinic_code: req.body.clinic_code || null,
+      reg_doc_birth_cert: req.body.reg_doc_birth_cert || false,
+      reg_doc_declaration: req.body.reg_doc_declaration || false,
+      reg_doc_school_records: req.body.reg_doc_school_records || false,
+      reg_doc_none: req.body.reg_doc_none || false,
+      sex_code: req.body.sex_code || null,
     }
 
     const { data: member, error: memberError } = await supabase
@@ -1397,6 +1592,9 @@ router.post('/family/:familyUuid/members', async (req: Request, res: Response) =
       entity_id: member.uuid,
       entity_type: 'MEMBER',
       data: {
+        national_id: member.national_id || null,
+        email: member.email || null,
+        phone: member.phone || null,
         first_name: member.first_name,
         last_name: member.last_name,
         relationship_to_head: member.relationship_to_head,
@@ -1592,6 +1790,351 @@ router.post('/member/:memberUuid/address', async (req: Request, res: Response) =
 })
 
 // ═══════════════════════════════════════════════════════════════════════════
+// MAILING ADDRESS (Migration 010)
+// Polymorphic: entity_type='FAMILY', entity_id=uuid, address_type='MAILING'
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/v1/registration/family/:familyUuid/mailing-address
+ * 
+ * Create or replace family mailing address.
+ * If mailing_address_different is false, copies from permanent address.
+ */
+router.post('/family/:familyUuid/mailing-address', async (req: Request, res: Response) => {
+  try {
+    const { familyUuid } = req.params
+    const { same_as_permanent, line1, line2, parish, district, geo_code, lot_apt, street_district, post_office, post_code, area_type } = req.body
+
+    // Verify family exists
+    const { data: family, error: familyError } = await supabase
+      .from('family')
+      .select('uuid')
+      .eq('uuid', familyUuid)
+      .single()
+
+    if (familyError || !family) {
+      return res.status(404).json({ success: false, error: 'Family not found.' })
+    }
+
+    // Delete existing mailing address if any
+    await supabase
+      .from('address')
+      .delete()
+      .eq('entity_type', 'FAMILY')
+      .eq('entity_id', familyUuid)
+      .eq('address_type', 'MAILING')
+
+    let addressData: Record<string, unknown>
+
+    if (same_as_permanent) {
+      // Copy from permanent address
+      const { data: permanentAddr } = await supabase
+        .from('address')
+        .select('*')
+        .eq('entity_type', 'FAMILY')
+        .eq('entity_id', familyUuid)
+        .eq('address_type', 'PERMANENT')
+        .single()
+
+      if (!permanentAddr) {
+        return res.status(400).json({ success: false, error: 'No permanent address found to copy from.' })
+      }
+
+      addressData = {
+        entity_type: 'FAMILY',
+        entity_id: familyUuid,
+        address_type: 'MAILING',
+        line1: permanentAddr.line1,
+        line2: permanentAddr.line2,
+        parish: permanentAddr.parish,
+        district: permanentAddr.district,
+        geo_code: permanentAddr.geo_code,
+        lot_apt: permanentAddr.lot_apt,
+        street_district: permanentAddr.street_district,
+        post_office: permanentAddr.post_office,
+        post_code: permanentAddr.post_code,
+        area_type: permanentAddr.area_type,
+        valid_from: new Date().toISOString(),
+      }
+
+      // Update family flag
+      await supabase
+        .from('family')
+        .update({ mailing_address_different: false })
+        .eq('uuid', familyUuid)
+    } else {
+      addressData = {
+        entity_type: 'FAMILY',
+        entity_id: familyUuid,
+        address_type: 'MAILING',
+        line1: line1 || null,
+        line2: line2 || null,
+        parish: parish || null,
+        district: district || null,
+        geo_code: geo_code || null,
+        lot_apt: lot_apt || null,
+        street_district: street_district || null,
+        post_office: post_office || null,
+        post_code: post_code || null,
+        area_type: area_type || null,
+        valid_from: new Date().toISOString(),
+      }
+
+      // Update family flag
+      await supabase
+        .from('family')
+        .update({ mailing_address_different: true })
+        .eq('uuid', familyUuid)
+    }
+
+    const { data: address, error: addrError } = await supabase
+      .from('address')
+      .insert(addressData)
+      .select()
+      .single()
+
+    if (addrError) {
+      return res.status(500).json({ success: false, error: `Failed to create mailing address: ${addrError.message}` })
+    }
+
+    return res.status(201).json({
+      success: true,
+      data: address,
+      message: 'Mailing address saved.',
+    })
+  } catch (err) {
+    console.error('Mailing address exception:', err)
+    return res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+/**
+ * GET /api/v1/registration/family/:familyUuid/mailing-address
+ */
+router.get('/family/:familyUuid/mailing-address', async (req: Request, res: Response) => {
+  try {
+    const { familyUuid } = req.params
+
+    const { data: address } = await supabase
+      .from('address')
+      .select('*')
+      .eq('entity_type', 'FAMILY')
+      .eq('entity_id', familyUuid)
+      .eq('address_type', 'MAILING')
+      .single()
+
+    return res.json({ success: true, data: address || null })
+  } catch (err) {
+    console.error('Get mailing address error:', err)
+    return res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+/**
+ * PUT /api/v1/registration/family/:familyUuid/mailing-address
+ */
+router.put('/family/:familyUuid/mailing-address', async (req: Request, res: Response) => {
+  try {
+    const { familyUuid } = req.params
+
+    const { data: existingAddr } = await supabase
+      .from('address')
+      .select('address_id')
+      .eq('entity_type', 'FAMILY')
+      .eq('entity_id', familyUuid)
+      .eq('address_type', 'MAILING')
+      .single()
+
+    if (!existingAddr) {
+      return res.status(404).json({ success: false, error: 'Mailing address not found. Use POST to create.' })
+    }
+
+    const updateData: Record<string, unknown> = {}
+    const fields = ['line1', 'line2', 'parish', 'district', 'geo_code', 'lot_apt', 'street_district', 'post_office', 'post_code', 'area_type']
+    for (const f of fields) {
+      if (req.body[f] !== undefined) updateData[f] = req.body[f]
+    }
+
+    const { data: address, error: updateError } = await supabase
+      .from('address')
+      .update(updateData)
+      .eq('address_id', existingAddr.address_id)
+      .select()
+      .single()
+
+    if (updateError) {
+      return res.status(500).json({ success: false, error: `Failed to update mailing address: ${updateError.message}` })
+    }
+
+    return res.json({ success: true, data: address, message: 'Mailing address updated.' })
+  } catch (err) {
+    console.error('Update mailing address error:', err)
+    return res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HOUSE SERVICES (Migration 010 - Section 3 of Jamaica Form)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/v1/registration/family/:familyUuid/house-services
+ * 
+ * Create or replace house services record for a family.
+ */
+router.post('/family/:familyUuid/house-services', async (req: Request, res: Response) => {
+  try {
+    const { familyUuid } = req.params
+
+    // Verify family exists
+    const { data: family, error: familyError } = await supabase
+      .from('family')
+      .select('uuid')
+      .eq('uuid', familyUuid)
+      .single()
+
+    if (familyError || !family) {
+      return res.status(404).json({ success: false, error: 'Family not found.' })
+    }
+
+    // Delete existing house services if any (upsert behavior)
+    await supabase
+      .from('house_services')
+      .delete()
+      .eq('family_uuid', familyUuid)
+
+    const hsData: Record<string, unknown> = {
+      family_uuid: familyUuid,
+      dwelling_tenure: req.body.dwelling_tenure || null,
+      utilities_electricity: req.body.utilities_electricity ?? false,
+      utilities_gas: req.body.utilities_gas ?? false,
+      utilities_telephone: req.body.utilities_telephone ?? false,
+      water_piped_internal: req.body.water_piped_internal ?? false,
+      water_piped_external: req.body.water_piped_external ?? false,
+      water_tank: req.body.water_tank ?? false,
+      water_river_spring: req.body.water_river_spring ?? false,
+      sanitation_wc_sewage: req.body.sanitation_wc_sewage ?? false,
+      sanitation_wc_septic: req.body.sanitation_wc_septic ?? false,
+      sanitation_pit_latrine: req.body.sanitation_pit_latrine ?? false,
+      sanitation_other: req.body.sanitation_other ?? false,
+      has_refrigerator: req.body.has_refrigerator ?? false,
+      has_living_room_set: req.body.has_living_room_set ?? false,
+      has_dining_room_set: req.body.has_dining_room_set ?? false,
+      has_washing_machine: req.body.has_washing_machine ?? false,
+      has_stove_gas: req.body.has_stove_gas ?? false,
+      has_stove_electric: req.body.has_stove_electric ?? false,
+      has_stove_kerosene: req.body.has_stove_kerosene ?? false,
+      has_tv: req.body.has_tv ?? false,
+      has_radio: req.body.has_radio ?? false,
+      has_stereo: req.body.has_stereo ?? false,
+      has_computer: req.body.has_computer ?? false,
+      has_cable_tv: req.body.has_cable_tv ?? false,
+      has_dvd_player: req.body.has_dvd_player ?? false,
+      has_bed: req.body.has_bed ?? false,
+      has_motor_vehicle: req.body.has_motor_vehicle ?? false,
+      has_motorcycle: req.body.has_motorcycle ?? false,
+      has_bicycle: req.body.has_bicycle ?? false,
+      has_cellphone: req.body.has_cellphone ?? false,
+      has_sewing_machine: req.body.has_sewing_machine ?? false,
+      weekly_family_spending: req.body.weekly_family_spending ?? null,
+      monthly_rent: req.body.monthly_rent ?? null,
+      total_income: req.body.total_income ?? null,
+      number_of_rooms: req.body.number_of_rooms ?? null,
+      number_of_bedrooms: req.body.number_of_bedrooms ?? null,
+    }
+
+    const { data: houseServices, error: hsError } = await supabase
+      .from('house_services')
+      .insert(hsData)
+      .select()
+      .single()
+
+    if (hsError) {
+      return res.status(500).json({ success: false, error: `Failed to create house services: ${hsError.message}` })
+    }
+
+    return res.status(201).json({
+      success: true,
+      data: houseServices,
+      message: 'House services saved.',
+    })
+  } catch (err) {
+    console.error('House services create exception:', err)
+    return res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+/**
+ * GET /api/v1/registration/family/:familyUuid/house-services
+ */
+router.get('/family/:familyUuid/house-services', async (req: Request, res: Response) => {
+  try {
+    const { familyUuid } = req.params
+
+    const { data: houseServices } = await supabase
+      .from('house_services')
+      .select('*')
+      .eq('family_uuid', familyUuid)
+      .single()
+
+    return res.json({ success: true, data: houseServices || null })
+  } catch (err) {
+    console.error('Get house services error:', err)
+    return res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+/**
+ * PUT /api/v1/registration/family/:familyUuid/house-services
+ */
+router.put('/family/:familyUuid/house-services', async (req: Request, res: Response) => {
+  try {
+    const { familyUuid } = req.params
+
+    const { data: existing } = await supabase
+      .from('house_services')
+      .select('id')
+      .eq('family_uuid', familyUuid)
+      .single()
+
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'House services not found. Use POST to create.' })
+    }
+
+    const updateData: Record<string, unknown> = {}
+    const hsFields = [
+      'dwelling_tenure', 'utilities_electricity', 'utilities_gas', 'utilities_telephone',
+      'water_piped_internal', 'water_piped_external', 'water_tank', 'water_river_spring',
+      'sanitation_wc_sewage', 'sanitation_wc_septic', 'sanitation_pit_latrine', 'sanitation_other',
+      'has_refrigerator', 'has_living_room_set', 'has_dining_room_set', 'has_washing_machine',
+      'has_stove_gas', 'has_stove_electric', 'has_stove_kerosene', 'has_tv', 'has_radio',
+      'has_stereo', 'has_computer', 'has_cable_tv', 'has_dvd_player', 'has_bed',
+      'has_motor_vehicle', 'has_motorcycle', 'has_bicycle', 'has_cellphone', 'has_sewing_machine',
+      'weekly_family_spending', 'monthly_rent', 'total_income', 'number_of_rooms', 'number_of_bedrooms',
+    ]
+    for (const f of hsFields) {
+      if (req.body[f] !== undefined) updateData[f] = req.body[f]
+    }
+
+    const { data: houseServices, error: updateError } = await supabase
+      .from('house_services')
+      .update(updateData)
+      .eq('id', existing.id)
+      .select()
+      .single()
+
+    if (updateError) {
+      return res.status(500).json({ success: false, error: `Failed to update house services: ${updateError.message}` })
+    }
+
+    return res.json({ success: true, data: houseServices, message: 'House services updated.' })
+  } catch (err) {
+    console.error('Update house services error:', err)
+    return res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
 // STEP 7: MEMBER DOCUMENTS (POLYMORPHIC)
 // Uses owner_type='MEMBER', owner_id=member_id
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1733,6 +2276,22 @@ router.get('/family/:familyUuid/review', async (req: Request, res: Response) => 
       .eq('address_type', 'PERMANENT')
       .single()
 
+    // Get family's mailing address (POLYMORPHIC) - Migration 010
+    const { data: mailingAddress } = await supabase
+      .from('address')
+      .select('*')
+      .eq('entity_type', 'FAMILY')
+      .eq('entity_id', familyUuid)
+      .eq('address_type', 'MAILING')
+      .single()
+
+    // Get house services - Migration 010
+    const { data: houseServices } = await supabase
+      .from('house_services')
+      .select('*')
+      .eq('family_uuid', familyUuid)
+      .single()
+
     // Get all members
     const { data: members } = await supabase
       .from('family_member')
@@ -1796,6 +2355,8 @@ router.get('/family/:familyUuid/review', async (req: Request, res: Response) => 
       data: {
         family,
         permanent_address: permanentAddress,
+        mailing_address: mailingAddress || null,
+        house_services: houseServices || null,
         members: membersWithAddresses,
         family_documents: familyDocuments || [],
         member_documents: memberDocuments || [],
@@ -1920,16 +2481,16 @@ router.post('/family/:familyUuid/submit', async (req: Request, res: Response) =>
       })
     }
 
-    // Validate member count
+    // Validate member count — auto-update household_size to actual count
     const { count: memberCount } = await supabase
       .from('family_member')
       .select('*', { count: 'exact', head: true })
       .eq('family_uuid', familyUuid)
 
-    if ((memberCount || 0) !== family.household_size) {
+    if ((memberCount || 0) < 1) {
       return res.status(400).json({
         success: false,
-        error: `Cannot submit. Member count (${memberCount}) does not match household_size (${family.household_size})`,
+        error: 'Cannot submit. At least one family member is required.',
       })
     }
 
@@ -1948,15 +2509,17 @@ router.post('/family/:familyUuid/submit', async (req: Request, res: Response) =>
       })
     }
 
-    // Update to SUBMITTED (UPPERCASE)
+    // Update to SUBMITTED (UPPERCASE) and sync household_size to actual member count
     const oldStatus = family.registration_status
     const submittedAt = new Date().toISOString()
+    const actualMemberCount = memberCount || 1
     
     const { data: updatedFamily, error: updateError } = await supabase
       .from('family')
       .update({
         registration_status: 'SUBMITTED', // UPPERCASE
         submitted_at: submittedAt,
+        household_size: actualMemberCount,  // Sync to actual members
       })
       .eq('uuid', familyUuid)
       .select()
@@ -2210,6 +2773,9 @@ router.post('/family/:familyUuid/members/add', async (req: Request, res: Respons
       entity_id: member.uuid,
       entity_type: 'MEMBER',
       data: {
+        national_id: member.national_id || null,
+        email: member.email || null,
+        phone: member.phone || null,
         first_name: member.first_name,
         last_name: member.last_name,
         change_type: change_type || 'OTHER',

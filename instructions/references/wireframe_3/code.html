@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Citizen Dashboard: Grievances &amp; Appeals</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400;500;600;700,FILL@0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#0f2cbd",
+              "background-light": "#f6f6f8",
+              "background-dark": "#101322",
+            },
+            fontFamily: {
+              "display": ["Public Sans"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            font-family: 'Public Sans', sans-serif;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark text-[#0d101b] dark:text-white font-display">
+<div class="relative flex h-auto min-h-screen w-full flex-col bg-background-light dark:bg-background-dark overflow-x-hidden">
+<!-- TopAppBar -->
+<div class="flex items-center bg-white dark:bg-background-dark/50 border-b border-gray-200 dark:border-gray-800 p-4 justify-between sticky top-0 z-50">
+<div class="text-[#0d101b] dark:text-white flex size-12 shrink-0 items-center justify-center">
+<span class="material-symbols-outlined">menu</span>
+</div>
+<h2 class="text-[#0d101b] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center">Grievances &amp; Appeals</h2>
+<div class="flex w-12 items-center justify-end">
+<button class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 bg-transparent text-[#0d101b] dark:text-white gap-2 text-base font-bold leading-normal tracking-[0.015em] min-w-0 p-0">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</div>
+<!-- Navigation Tabs -->
+<div class="bg-white dark:bg-background-dark/50 pb-0">
+<div class="flex border-b border-gray-200 dark:border-gray-800 px-4 gap-8">
+<a class="flex flex-col items-center justify-center border-b-[3px] border-primary text-primary pb-[13px] pt-4" href="#">
+<p class="text-sm font-bold leading-normal tracking-[0.015em]">Existing</p>
+</a>
+<a class="flex flex-col items-center justify-center border-b-[3px] border-transparent text-gray-500 dark:text-gray-400 pb-[13px] pt-4" href="#raise-new">
+<p class="text-sm font-bold leading-normal tracking-[0.015em]">Raise New</p>
+</a>
+</div>
+</div>
+<!-- Part A: Existing Grievances List -->
+<div class="p-4 space-y-4">
+<h3 class="text-[#0d101b] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em]">Existing Grievances</h3>
+<div class="space-y-3">
+<!-- Grievance Card 1 -->
+<div class="flex flex-col gap-3 bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-3">
+<div class="text-primary flex items-center justify-center rounded-lg bg-primary/10 shrink-0 size-10">
+<span class="material-symbols-outlined">description</span>
+</div>
+<div>
+<p class="text-[#0d101b] dark:text-white text-base font-bold">PRG-882910</p>
+<p class="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">Rural Support</p>
+</div>
+</div>
+<span class="px-2 py-1 text-[10px] font-bold uppercase rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Under Review</span>
+</div>
+<div class="grid grid-cols-2 gap-2 pt-2 border-t border-gray-50 dark:border-gray-800">
+<div>
+<p class="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-bold">Type</p>
+<p class="text-sm text-[#0d101b] dark:text-white">Eligibility Review</p>
+</div>
+<div>
+<p class="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-bold">Submitted</p>
+<p class="text-sm text-[#0d101b] dark:text-white">Oct 24, 2023</p>
+</div>
+</div>
+</div>
+<!-- Grievance Card 2 -->
+<div class="flex flex-col gap-3 bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-3">
+<div class="text-primary flex items-center justify-center rounded-lg bg-primary/10 shrink-0 size-10">
+<span class="material-symbols-outlined">description</span>
+</div>
+<div>
+<p class="text-[#0d101b] dark:text-white text-base font-bold">PRG-772102</p>
+<p class="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">Health Grant</p>
+</div>
+</div>
+<span class="px-2 py-1 text-[10px] font-bold uppercase rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Resolved</span>
+</div>
+<div class="grid grid-cols-2 gap-2 pt-2 border-t border-gray-50 dark:border-gray-800">
+<div>
+<p class="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-bold">Type</p>
+<p class="text-sm text-[#0d101b] dark:text-white">Payment Issue</p>
+</div>
+<div>
+<p class="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-bold">Submitted</p>
+<p class="text-sm text-[#0d101b] dark:text-white">Sep 12, 2023</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Part B: Raise New Grievance Form -->
+<div class="p-4 bg-white dark:bg-background-dark/30 mt-4 rounded-t-3xl shadow-2xl border-t border-gray-200 dark:border-gray-800" id="raise-new">
+<h3 class="text-[#0d101b] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] mb-4">Raise New Grievance</h3>
+<form class="space-y-4">
+<!-- Programme Dropdown -->
+<div class="flex flex-col gap-1.5">
+<label class="text-sm font-bold text-gray-700 dark:text-gray-300">Programme</label>
+<div class="relative">
+<select class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-sm appearance-none focus:ring-2 focus:ring-primary focus:border-transparent outline-none">
+<option value="">Select a programme</option>
+<option>Rural Support Scheme</option>
+<option>Health Grant 2024</option>
+<option>Education Subsidy</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">expand_more</span>
+</div>
+</div>
+<!-- Grievance Type Dropdown -->
+<div class="flex flex-col gap-1.5">
+<label class="text-sm font-bold text-gray-700 dark:text-gray-300">Grievance Type</label>
+<div class="relative">
+<select class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-sm appearance-none focus:ring-2 focus:ring-primary focus:border-transparent outline-none">
+<option value="">Select grievance type</option>
+<option>Rejection Appeal</option>
+<option>Payment Delay</option>
+<option>Incorrect Details</option>
+<option>Others</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">expand_more</span>
+</div>
+</div>
+<!-- Reason Textarea -->
+<div class="flex flex-col gap-1.5">
+<label class="text-sm font-bold text-gray-700 dark:text-gray-300">Reason for Grievance</label>
+<textarea class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none" placeholder="Describe your issue in detail..." rows="4"></textarea>
+</div>
+<!-- Supporting Remarks -->
+<div class="flex flex-col gap-1.5">
+<label class="text-sm font-bold text-gray-700 dark:text-gray-300">Supporting Remarks (Optional)</label>
+<input class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none" placeholder="Any additional information..." type="text"/>
+</div>
+<!-- Upload Document -->
+<div class="flex flex-col gap-1.5">
+<label class="text-sm font-bold text-gray-700 dark:text-gray-300">Supporting Documents</label>
+<button class="w-full flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-6 bg-gray-50/50 dark:bg-gray-800/50 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" type="button">
+<span class="material-symbols-outlined">upload_file</span>
+<span class="text-sm font-medium">Click to upload documents</span>
+</button>
+</div>
+<!-- Submit Button -->
+<button class="w-full bg-primary text-white font-bold py-4 rounded-xl shadow-lg shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all" type="button">
+                Submit Grievance
+            </button>
+</form>
+<!-- Footer Helper Text -->
+<div class="mt-8 mb-4 p-4 rounded-lg bg-primary/5 dark:bg-primary/10 border border-primary/20">
+<div class="flex gap-3">
+<span class="material-symbols-outlined text-primary shrink-0">info</span>
+<p class="text-xs text-primary/80 dark:text-primary/90 leading-relaxed italic">
+                    Use this form if you were rejected for a programme and wish to appeal, or if you are experiencing significant delays in payment processing.
+                </p>
+</div>
+</div>
+</div>
+<!-- Bottom Spacing -->
+<div class="h-10"></div>
+</div>
+</body></html>

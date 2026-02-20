@@ -12,6 +12,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useAuthStore } from '@/store/authStore'
+import { authFetch, authUpload, API_BASE } from '@/services/authFetch'
 import type { DocumentStatus } from '@/types'
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -36,7 +37,7 @@ interface DocRecord {
   owner_id: string
   status: DocumentStatus
   rejection_reason?: string
-  created_at: string
+  uploaded_at: string
   document_verification?: Array<{
     status: string
     rejection_reason?: string
@@ -54,7 +55,6 @@ interface HolderOption {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════
 
-const API_BASE = 'http://localhost:3001/api/v1'
 const UPLOAD_API = `${API_BASE}/upload`
 
 const DOC_TYPES = [
@@ -91,11 +91,12 @@ const allTypeLabels: Record<string, string> = {
 
 const getStatusBadge = (status: string) => {
   const styles: Record<string, string> = {
+    UPLOADED: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
     VERIFIED: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
     PENDING: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
     REJECTED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
   }
-  return styles[status] || styles.PENDING
+  return styles[status] || styles.UPLOADED
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -150,7 +151,7 @@ export default function Documents() {
 
     try {
       // 1. Fetch family + members
-      const famRes = await fetch(`${API_BASE}/families/${familyUuid}`)
+      const famRes = await authFetch(`/families/${familyUuid}`)
       const famJson = await famRes.json()
 
       if (!famRes.ok || !famJson.success) {
@@ -169,24 +170,36 @@ export default function Documents() {
       // 2. Fetch documents — family-level
       const allDocs: DocRecord[] = []
 
-      const famDocRes = await fetch(`${API_BASE}/documents/family/${familyUuid}`)
+      const famDocRes = await authFetch(`/documents/family/${familyUuid}`)
       const famDocJson = await famDocRes.json()
-      if (famDocJson.success && famDocJson.data) {
+      
+      console.log('Family documents response:', { ok: famDocRes.ok, data: famDocJson })
+      
+      if (famDocRes.ok && famDocJson.success && famDocJson.data) {
         for (const d of famDocJson.data) {
           allDocs.push(normalizeDoc(d, 'FAMILY', familyUuid))
         }
+      } else if (!famDocRes.ok) {
+        console.warn('Failed to fetch family documents:', famDocJson)
       }
 
       // 3. Fetch documents — per member
       for (const m of famMembers) {
-        const memDocRes = await fetch(`${API_BASE}/documents/member/${m.uuid}`)
+        const memDocRes = await authFetch(`/documents/member/${m.uuid}`)
         const memDocJson = await memDocRes.json()
-        if (memDocJson.success && memDocJson.data) {
+        
+        console.log(`Member ${m.uuid} documents response:`, { ok: memDocRes.ok, data: memDocJson })
+        
+        if (memDocRes.ok && memDocJson.success && memDocJson.data) {
           for (const d of memDocJson.data) {
             allDocs.push(normalizeDoc(d, 'MEMBER', m.uuid))
           }
+        } else if (!memDocRes.ok) {
+          console.warn(`Failed to fetch documents for member ${m.uuid}:`, memDocJson)
         }
       }
+      
+      console.log('Total documents loaded:', allDocs.length)
 
       setDocuments(allDocs)
     } catch (err) {
@@ -225,7 +238,7 @@ export default function Documents() {
       owner_id: ownerId,
       status: effectiveStatus as DocumentStatus,
       rejection_reason: rejectionReason,
-      created_at: (d.created_at as string) || new Date().toISOString(),
+      uploaded_at: (d.uploaded_at as string) || new Date().toISOString(),
       document_verification: verifications,
     }
   }
@@ -248,9 +261,9 @@ export default function Documents() {
       formData.append('file', file)
       formData.append('document_type', selectedType)
 
-      const response = await fetch(
+      const response = await authUpload(
         `${UPLOAD_API}/${holder.ownerType}/${holder.ownerId}/documents`,
-        { method: 'POST', body: formData }
+        formData
       )
       const result = await response.json()
 
@@ -281,7 +294,7 @@ export default function Documents() {
   const handleDelete = async (doc: DocRecord) => {
     try {
       const ownerType = doc.owner_type.toLowerCase()
-      const res = await fetch(
+      const res = await authFetch(
         `${UPLOAD_API}/${ownerType}/${doc.owner_id}/documents/${doc.document_id}`,
         { method: 'DELETE' }
       )
@@ -309,7 +322,7 @@ export default function Documents() {
     try {
       // Delete old one first
       const ownerType = doc.owner_type.toLowerCase()
-      await fetch(
+      await authFetch(
         `${UPLOAD_API}/${ownerType}/${doc.owner_id}/documents/${doc.document_id}`,
         { method: 'DELETE' }
       )
@@ -319,9 +332,9 @@ export default function Documents() {
       formData.append('file', file)
       formData.append('document_type', doc.document_type)
 
-      const response = await fetch(
+      const response = await authUpload(
         `${UPLOAD_API}/${ownerType}/${doc.owner_id}/documents`,
-        { method: 'POST', body: formData }
+        formData
       )
       const result = await response.json()
 
@@ -535,7 +548,7 @@ export default function Documents() {
 
                   <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
                     <span className="text-xs text-gray-400">
-                      {new Date(doc.created_at).toLocaleDateString('en-US', {
+                      {new Date(doc.uploaded_at).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
                         year: 'numeric',

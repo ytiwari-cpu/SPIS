@@ -27,12 +27,16 @@ const apiClient = axios.create({
 
 // Request interceptor for auth token
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('spis-auth-storage')
+  const token = sessionStorage.getItem('spis-auth-storage')
   if (token) {
     try {
       const parsed = JSON.parse(token)
-      if (parsed.state?.token) {
-        config.headers.Authorization = `Bearer ${parsed.state.token}`
+      const session = parsed.state?.session
+      if (session?.access_token) {
+        config.headers.Authorization = `Bearer ${session.access_token}`
+      }
+      if (session?.family_id) {
+        config.headers['X-Family-ID'] = session.family_id
       }
     } catch {
       // Invalid token format
@@ -45,10 +49,9 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Clear auth and redirect to login
-      localStorage.removeItem('spis-auth-storage')
-      window.location.href = '/login'
+    if (error.response?.status === 401 && !globalThis.location.pathname.includes('/login')) {
+      sessionStorage.removeItem('spis-auth-storage')
+      globalThis.location.href = '/login'
     }
     return Promise.reject(error)
   }

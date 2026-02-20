@@ -7,6 +7,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '@/store/authStore'
+import { authFetch } from '@/services/authFetch'
 
 const API_BASE = 'http://localhost:3001/api/v1'
 
@@ -16,6 +17,9 @@ interface MemberDB {
   national_id: string | null
   first_name: string
   last_name: string
+  middle_names: string | null
+  alias: string | null
+  trn: string | null
   phone: string | null
   email: string | null
   relationship_to_head: string
@@ -27,14 +31,23 @@ interface AddressDB {
   line2: string | null
   parish: string | null
   district: string | null
+  lot_apt: string | null
+  street_district: string | null
+  post_office: string | null
+  post_code: string | null
+  area_type: string | null
 }
 
 interface FamilyWithDetails {
   family_id: string
   head_first_name: string | null
   head_last_name: string | null
+  head_middle_names: string | null
+  head_alias: string | null
   phone: string | null
   email: string | null
+  programme: string | null
+  payment_option: string | null
   members: MemberDB[]
   address: AddressDB | null
 }
@@ -54,7 +67,7 @@ export default function MyProfile() {
 
       try {
         // Use uuid for API calls (internal identifier)
-        const res = await fetch(`${API_BASE}/families/${user.uuid}`)
+        const res = await authFetch(`/families/${user.uuid}`)
         const data = await res.json()
 
         if (data.success && data.data) {
@@ -77,19 +90,29 @@ export default function MyProfile() {
 
   // Get display values from family or head member
   const displayName = family?.head_first_name && family?.head_last_name
-    ? `${family.head_first_name} ${family.head_last_name}`
+    ? `${family.head_first_name}${family.head_middle_names ? ' ' + family.head_middle_names : ''} ${family.head_last_name}`
     : headMember
-      ? `${headMember.first_name} ${headMember.last_name}`
+      ? `${headMember.first_name}${headMember.middle_names ? ' ' + headMember.middle_names : ''} ${headMember.last_name}`
       : user?.name || 'N/A'
 
+  const displayAlias = family?.head_alias || headMember?.alias || null
   const displayEmail = family?.email || headMember?.email || user?.email || 'N/A'
   const displayPhone = family?.phone || headMember?.phone || 'N/A'
   const displayNationalId = headMember?.national_id
     ? `****-****-${headMember.national_id.slice(-4)}`
     : 'Not registered'
+  const displayTrn = headMember?.trn || null
 
   const displayAddress = family?.address
-    ? `${family.address.line1}${family.address.line2 ? ', ' + family.address.line2 : ''}, ${family.address.parish || ''} ${family.address.district || ''}`
+    ? [
+        family.address.lot_apt,
+        family.address.line1,
+        family.address.line2,
+        family.address.street_district,
+        family.address.parish,
+        family.address.district,
+        family.address.post_office && `P.O. ${family.address.post_office}`,
+      ].filter(Boolean).join(', ')
     : 'Not registered'
 
   if (isLoading) {
@@ -130,6 +153,12 @@ export default function MyProfile() {
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Full Name</p>
               <p className="text-base font-medium text-gray-900 dark:text-white">{displayName}</p>
             </div>
+            {displayAlias && (
+              <div className="flex flex-col border-b border-gray-100 dark:border-gray-800 pb-3">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Alias</p>
+                <p className="text-base font-medium text-gray-900 dark:text-white">{displayAlias}</p>
+              </div>
+            )}
             <div className="flex flex-col border-b border-gray-100 dark:border-gray-800 pb-3">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Email Address</p>
               <p className="text-base font-medium text-gray-900 dark:text-white">{displayEmail}</p>
@@ -142,6 +171,20 @@ export default function MyProfile() {
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">National ID</p>
               <p className="text-base font-medium text-gray-900 dark:text-white">{displayNationalId}</p>
             </div>
+            {displayTrn && (
+              <div className="flex flex-col border-b border-gray-100 dark:border-gray-800 pb-3">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">TRN</p>
+                <p className="text-base font-medium text-gray-900 dark:text-white font-mono">{displayTrn}</p>
+              </div>
+            )}
+            {family?.programme && (
+              <div className="flex flex-col border-b border-gray-100 dark:border-gray-800 pb-3">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Programme</p>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 w-fit">
+                  {family.programme}
+                </span>
+              </div>
+            )}
             <div className="flex flex-col pb-1">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Residential Address</p>
               <p className="text-base font-medium text-gray-900 dark:text-white leading-relaxed">

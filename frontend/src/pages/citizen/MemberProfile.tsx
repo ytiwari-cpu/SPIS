@@ -13,8 +13,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
-
-const API_BASE = 'http://localhost:3001/api/v1'
+import { authFetch } from '@/services/authFetch'
 
 interface MemberDB {
   uuid: string                              // Internal UUID
@@ -32,6 +31,38 @@ interface MemberDB {
   member_status: string
   alive_flag: boolean
   annual_income: number | null
+  // Migration 010 fields
+  middle_names: string | null
+  alias: string | null
+  trn: string | null
+  nis_no: string | null
+  id_type: string | null
+  id_number: string | null
+  birth_entry_number: string | null
+  mothers_maiden_name: string | null
+  is_twin: boolean
+  order_number: number | null
+  occupation: string | null
+  contact_no_1: string | null
+  contact_no_2: string | null
+  union_status: string | null
+  last_school_completed: string | null
+  school_name: string | null
+  school_code: string | null
+  school_grade: string | null
+  school_class: string | null
+  school_shift: string | null
+  pregnant: string | null
+  pregnancy_due_date: string | null
+  is_disabled: boolean
+  is_mentally_ill: boolean
+  is_chronically_ill: boolean
+  is_shut_in: boolean
+  is_nis_pensioner: boolean
+  pension_number: string | null
+  clinic_name: string | null
+  clinic_code: string | null
+  sex_code: string | null
 }
 
 interface AddressDB {
@@ -40,6 +71,11 @@ interface AddressDB {
   line2: string | null
   parish: string | null
   district: string | null
+  lot_apt: string | null
+  street_district: string | null
+  post_office: string | null
+  post_code: string | null
+  area_type: string | null
 }
 
 interface FamilyWithDetails {
@@ -113,7 +149,7 @@ export default function MemberProfile() {
 
       try {
         // Use uuid for API calls (internal identifier)
-        const res = await fetch(`${API_BASE}/families/${user.uuid}`)
+        const res = await authFetch(`/families/${user.uuid}`)
         const data = await res.json()
 
         if (data.success && data.data) {
@@ -145,7 +181,7 @@ export default function MemberProfile() {
       if (!member) return
       
       try {
-        const res = await fetch(`${API_BASE}/documents/member/${member.uuid}`)
+        const res = await authFetch(`/documents/member/${member.uuid}`)
         const data = await res.json()
         if (data.success && Array.isArray(data.data)) {
           const photo = data.data.find((d: { document_type: string; file_url?: string }) => d.document_type === 'profile_photo')
@@ -181,7 +217,15 @@ export default function MemberProfile() {
 
   // Display values
   const displayAddress = family?.address
-    ? `${family.address.line1}${family.address.line2 ? ', ' + family.address.line2 : ''}, ${family.address.parish || ''} ${family.address.district || ''}`
+    ? [
+        family.address.lot_apt,
+        family.address.line1,
+        family.address.line2,
+        family.address.street_district,
+        family.address.parish,
+        family.address.district,
+        family.address.post_office && `P.O. ${family.address.post_office}`,
+      ].filter(Boolean).join(', ')
     : 'Not registered'
 
   if (isLoading) {
@@ -231,7 +275,7 @@ export default function MemberProfile() {
           >
             {sortedMembers.map(member => (
               <option key={member.member_id} value={member.member_id}>
-                {member.first_name} {member.last_name} 
+                {member.first_name} {member.middle_names ? `${member.middle_names} ` : ''}{member.last_name} 
                 {member.relationship_to_head === 'head' ? ' (Head)' : ` (${member.relationship_to_head})`}
                 {member.member_status !== 'ACTIVE' && member.member_status ? ` - ${member.member_status}` : ''}
               </option>
@@ -269,8 +313,11 @@ export default function MemberProfile() {
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                    {selectedMember.first_name} {selectedMember.last_name}
+                    {selectedMember.first_name} {selectedMember.middle_names ? `${selectedMember.middle_names} ` : ''}{selectedMember.last_name}
                   </h3>
+                  {selectedMember.alias && (
+                    <p className="text-gray-400 dark:text-gray-500 text-xs italic">a.k.a. {selectedMember.alias}</p>
+                  )}
                   <p className="text-gray-500 dark:text-gray-400 text-sm capitalize">
                     {selectedMember.relationship_to_head === 'head' ? 'Head of Household' : selectedMember.relationship_to_head}
                   </p>
@@ -302,7 +349,7 @@ export default function MemberProfile() {
                 <div className="flex flex-col border-b border-gray-100 dark:border-gray-800 pb-3">
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Full Name</p>
                   <p className="text-base font-medium text-gray-900 dark:text-white">
-                    {selectedMember.first_name} {selectedMember.last_name}
+                    {selectedMember.first_name} {selectedMember.middle_names ? `${selectedMember.middle_names} ` : ''}{selectedMember.last_name}
                   </p>
                 </div>
                 
@@ -334,6 +381,23 @@ export default function MemberProfile() {
                     {selectedMember.phone || 'Not provided'}
                   </p>
                 </div>
+
+                {(selectedMember.contact_no_1 || selectedMember.contact_no_2) && (
+                  <div className="grid grid-cols-2 gap-4 border-b border-gray-100 dark:border-gray-800 pb-3">
+                    {selectedMember.contact_no_1 && (
+                      <div className="flex flex-col">
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Contact No. 1</p>
+                        <p className="text-base font-medium text-gray-900 dark:text-white">{selectedMember.contact_no_1}</p>
+                      </div>
+                    )}
+                    {selectedMember.contact_no_2 && (
+                      <div className="flex flex-col">
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Contact No. 2</p>
+                        <p className="text-base font-medium text-gray-900 dark:text-white">{selectedMember.contact_no_2}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
                 
                 <div className="flex flex-col border-b border-gray-100 dark:border-gray-800 pb-3">
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">National ID</p>
@@ -344,12 +408,43 @@ export default function MemberProfile() {
                   </p>
                 </div>
 
-                <div className="flex flex-col border-b border-gray-100 dark:border-gray-800 pb-3">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Marital Status</p>
-                  <p className="text-base font-medium text-gray-900 dark:text-white capitalize">
-                    {selectedMember.marital_status || 'N/A'}
-                  </p>
+                {selectedMember.trn && (
+                  <div className="flex flex-col border-b border-gray-100 dark:border-gray-800 pb-3">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">TRN</p>
+                    <p className="text-base font-medium text-gray-900 dark:text-white font-mono">{selectedMember.trn}</p>
+                  </div>
+                )}
+
+                {selectedMember.nis_no && (
+                  <div className="flex flex-col border-b border-gray-100 dark:border-gray-800 pb-3">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">NIS No.</p>
+                    <p className="text-base font-medium text-gray-900 dark:text-white font-mono">{selectedMember.nis_no}</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4 border-b border-gray-100 dark:border-gray-800 pb-3">
+                  <div className="flex flex-col">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Marital Status</p>
+                    <p className="text-base font-medium text-gray-900 dark:text-white capitalize">
+                      {selectedMember.marital_status || 'N/A'}
+                    </p>
+                  </div>
+                  {selectedMember.union_status && (
+                    <div className="flex flex-col">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Union Status</p>
+                      <p className="text-base font-medium text-gray-900 dark:text-white capitalize">
+                        {selectedMember.union_status.replace(/_/g, ' ')}
+                      </p>
+                    </div>
+                  )}
                 </div>
+
+                {selectedMember.occupation && (
+                  <div className="flex flex-col border-b border-gray-100 dark:border-gray-800 pb-3">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Occupation</p>
+                    <p className="text-base font-medium text-gray-900 dark:text-white">{selectedMember.occupation}</p>
+                  </div>
+                )}
 
                 <div className="flex flex-col border-b border-gray-100 dark:border-gray-800 pb-3">
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Annual Income</p>
@@ -357,6 +452,70 @@ export default function MemberProfile() {
                     {formatCurrency(selectedMember.annual_income)}
                   </p>
                 </div>
+
+                {/* Education */}
+                {selectedMember.last_school_completed && (
+                  <div className="border-b border-gray-100 dark:border-gray-800 pb-3">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Education</p>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <span className="text-gray-400 text-xs">Last School Level</span>
+                        <p className="text-gray-900 dark:text-white capitalize">{selectedMember.last_school_completed.replace(/_/g, ' ')}</p>
+                      </div>
+                      {selectedMember.school_name && (
+                        <div>
+                          <span className="text-gray-400 text-xs">School Name</span>
+                          <p className="text-gray-900 dark:text-white">{selectedMember.school_name}</p>
+                        </div>
+                      )}
+                      {selectedMember.school_grade && (
+                        <div>
+                          <span className="text-gray-400 text-xs">Grade</span>
+                          <p className="text-gray-900 dark:text-white">{selectedMember.school_grade}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Health Flags */}
+                {(selectedMember.is_disabled || selectedMember.is_chronically_ill || selectedMember.is_mentally_ill || selectedMember.is_shut_in || selectedMember.pregnant === 'yes') && (
+                  <div className="border-b border-gray-100 dark:border-gray-800 pb-3">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Health</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedMember.is_disabled && (
+                        <span className="px-2 py-0.5 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 rounded-full text-xs">Disabled</span>
+                      )}
+                      {selectedMember.is_chronically_ill && (
+                        <span className="px-2 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-full text-xs">Chronically Ill</span>
+                      )}
+                      {selectedMember.is_mentally_ill && (
+                        <span className="px-2 py-0.5 bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 rounded-full text-xs">Mentally Ill</span>
+                      )}
+                      {selectedMember.is_shut_in && (
+                        <span className="px-2 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full text-xs">Shut-In</span>
+                      )}
+                      {selectedMember.pregnant === 'yes' && (
+                        <span className="px-2 py-0.5 bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400 rounded-full text-xs">
+                          Pregnant{selectedMember.pregnancy_due_date ? ` (Due: ${new Date(selectedMember.pregnancy_due_date).toLocaleDateString()})` : ''}
+                        </span>
+                      )}
+                    </div>
+                    {selectedMember.clinic_name && (
+                      <p className="text-xs text-gray-500 mt-2">Clinic: {selectedMember.clinic_name}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Pension */}
+                {selectedMember.is_nis_pensioner && (
+                  <div className="flex flex-col border-b border-gray-100 dark:border-gray-800 pb-3">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">NIS Pensioner</p>
+                    <p className="text-base font-medium text-gray-900 dark:text-white">
+                      Yes{selectedMember.pension_number ? ` — #${selectedMember.pension_number}` : ''}
+                    </p>
+                  </div>
+                )}
                 
                 <div className="flex flex-col pb-1">
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Residential Address</p>
