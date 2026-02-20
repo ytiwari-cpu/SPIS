@@ -225,8 +225,8 @@ export default function LoginPage() {
                 setError('')
               }}
               className={`flex-1 py-2 px-4 rounded-md font-medium transition-all ${loginMode === 'password'
-                  ? 'bg-white dark:bg-gray-700 text-primary shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                ? 'bg-white dark:bg-gray-700 text-primary shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                 }`}
             >
               <span className="flex items-center justify-center gap-2">
@@ -244,8 +244,8 @@ export default function LoginPage() {
                 setError('')
               }}
               className={`flex-1 py-2 px-4 rounded-md font-medium transition-all ${loginMode === 'otp'
-                  ? 'bg-white dark:bg-gray-700 text-primary shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                ? 'bg-white dark:bg-gray-700 text-primary shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                 }`}
             >
               <span className="flex items-center justify-center gap-2">
@@ -379,23 +379,6 @@ export default function LoginPage() {
               <Link to="/register" className="text-primary font-semibold hover:underline">
                 Register your family
               </Link>
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-6 p-4 bg-primary/5 dark:bg-primary/10 rounded-lg border border-primary/20">
-          <div className="flex gap-3">
-            <span className="material-symbols-outlined text-primary shrink-0">info</span>
-            <p className="text-xs text-primary/80 dark:text-primary/90 leading-relaxed">
-              {loginMode === 'otp' ? (
-                <>
-                  <strong>OTP Login:</strong> Enter your National ID and we&apos;ll send a one-time password to your registered email. Use this if you don&apos;t have a password yet.
-                </>
-              ) : (
-                <>
-                  First time? Register your family, then use &quot;Forgot password?&quot; to create your login credentials using the National ID linked to your registration.
-                </>
-              )}
             </p>
           </div>
         </div>
