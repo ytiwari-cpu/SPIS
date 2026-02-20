@@ -79,7 +79,7 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
-  CREATE TYPE otp_purpose AS ENUM ('password_reset', 'mfa_email', 'invite');
+  CREATE TYPE otp_purpose AS ENUM ('password_reset', 'mfa_email', 'invite', 'worker_registration', 'otp_login');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 

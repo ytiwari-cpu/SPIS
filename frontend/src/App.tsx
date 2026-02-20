@@ -38,7 +38,8 @@ import { AdminDashboard } from './pages/admin'
 function App() {
   const { isAuthenticated, session, logout } = useAuthStore()
 
-  // Validate session on mount - check if token exists and is not expired
+  // Validate session on mount - check if token exists, is not expired,
+  // and is still accepted by the server (handles server restarts)
   useEffect(() => {
     if (isAuthenticated && session) {
       // Check if access token exists
@@ -53,17 +54,49 @@ function App() {
         const payload = JSON.parse(atob(session.access_token.split('.')[1]))
         const expiresAt = payload.exp * 1000 // Convert to milliseconds
         const now = Date.now()
-        
+
         if (now >= expiresAt) {
           console.warn('Session expired, logging out')
           logout()
+          return
         }
       } catch (error) {
         console.error('Error validating token:', error)
         logout()
+        return
       }
+
+      // Server-side validation: call a protected endpoint to check if
+      // the token is still accepted (catches server restarts which
+      // invalidate all tokens issued before the restart)
+      const validateServerSide = async () => {
+        try {
+          const raw = sessionStorage.getItem('spis-auth-storage')
+          if (!raw) return
+          const stored = JSON.parse(raw)
+          const accessToken = stored.state?.session?.access_token
+          if (!accessToken) return
+
+          const response = await fetch('http://localhost:3001/api/v1/families', {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          })
+
+          if (response.status === 401) {
+            console.warn('Server rejected token (likely restarted), logging out')
+            logout()
+          }
+        } catch {
+          // Network error — server may be down, don't force logout
+        }
+      }
+
+      validateServerSide()
     }
-  }, [isAuthenticated, session, logout])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Routes>

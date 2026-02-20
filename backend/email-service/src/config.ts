@@ -31,14 +31,14 @@ function envBool(key: string, fallback: boolean): boolean {
 
 export const config = {
   // ── Server ──────────────────────────────────────────────
-  port: envInt('PORT', 3002),
+  port: envInt('EMAIL_SERVICE_PORT', envInt('PORT', 3002)),
   nodeEnv: env('NODE_ENV', 'development'),
   corsOrigin: env('CORS_ORIGIN', 'http://localhost:3000'),
 
   // ── PostgreSQL ──────────────────────────────────────────
-  databaseUrl: env('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/email_db'),
-  dbPoolMin: envInt('DB_POOL_MIN', 2),
-  dbPoolMax: envInt('DB_POOL_MAX', 10),
+  databaseUrl: env('EMAIL_DATABASE_URL', env('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/email_db')),
+  dbPoolMin: envInt('EMAIL_DB_POOL_MIN', envInt('DB_POOL_MIN', 2)),
+  dbPoolMax: envInt('EMAIL_DB_POOL_MAX', envInt('DB_POOL_MAX', 10)),
 
   // ── RabbitMQ ────────────────────────────────────────────
   rabbitmqUrl: env('RABBITMQ_URL', 'amqp://guest:guest@localhost:5672'),

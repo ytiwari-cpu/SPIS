@@ -11,20 +11,19 @@ import { config } from '../config.js'
 import { logger } from '../lib/logger.js'
 import { generateOtp, hashOtp, verifyOtp, hashNationalId } from '../lib/crypto.js'
 import { sendOtpEmail } from '../lib/emailClient.js'
-import { lookupByNationalId } from '../lib/registryClient.js'
 import {
-  getUserByNationalIdHash, createUser, updateUserStatus,
+  getUserByNationalIdHash, updateUserStatus,
   updateUserPassword,
   createOtpToken, getActiveOtpToken,
-  incrementOtpAttempt, markOtpUsed, addRole,
+  incrementOtpAttempt, markOtpUsed,
 } from '../db/repository.js'
 import { publishPasswordResetRequested } from '../bus/rabbitmq.js'
 
 /**
  * Step 1: Request password reset by national_id.
  *
- * - Look up national_id in Registry → get email + registry_id
- * - Find or create IAM user linked to that registry_id
+ * - Look up national_id ONLY in users table (not family_member)
+ * - If not found, return error suggesting OTP login
  * - Generate OTP, store hashed, send via Email Service
  */
 export async function requestPasswordReset(nationalId: string): Promise<{
@@ -34,41 +33,23 @@ export async function requestPasswordReset(nationalId: string): Promise<{
   // 1. Hash the national_id for lookup
   const nationalIdHash = hashNationalId(nationalId)
 
-  // 2. Look up in Registry by raw national_id
-  const registryResult = await lookupByNationalId(nationalId)
-  if (!registryResult) {
-    // Prompt says: return 404 and trigger UI toast
-    const err = new Error('National ID not found in registry')
+  // 2. Look up ONLY in users table (not Registry/family_member)
+  const user = await getUserByNationalIdHash(nationalIdHash)
+  if (!user) {
+    // User not found in users table - suggest OTP login
+    const err = new Error('User not found. Please try to login with OTP.')
     ;(err as Error & { statusCode: number }).statusCode = 404
     throw err
   }
 
-  const { registry_id, email } = registryResult
+  const email = user.email
   if (!email) {
-    const err = new Error('No email is registered for this national ID')
+    const err = new Error('No email is registered for this user')
     ;(err as Error & { statusCode: number }).statusCode = 409
     throw err
   }
 
-  // 3. Find or create local IAM user
-  let user = await getUserByNationalIdHash(nationalIdHash)
-  if (!user) {
-    user = await createUser({
-      email,
-      registryId: registry_id,
-      nationalIdHash,
-      status: 'pending',
-    })
-    // Assign default Citizen role
-    await addRole(user.user_id, 'Citizen')
-
-    logger.info('IAM user created for password reset', {
-      user_id: user.user_id,
-      registry_id,
-    })
-  }
-
-  // 4. Generate OTP
+  // 3. Generate OTP
   const otp = generateOtp()
   const otpHash = hashOtp(otp)
   const expiresAt = new Date(Date.now() + config.otp.ttlMinutes * 60 * 1000)
@@ -81,7 +62,7 @@ export async function requestPasswordReset(nationalId: string): Promise<{
     maxAttempts: config.otp.maxAttempts,
   })
 
-  // 5. Send OTP via Email Service
+  // 4. Send OTP via Email Service
   try {
     await sendOtpEmail({ 
       to_email: email, 
@@ -96,10 +77,10 @@ export async function requestPasswordReset(nationalId: string): Promise<{
     throw err
   }
 
-  // 6. Publish event
+  // 5. Publish event
   publishPasswordResetRequested({
     user_id: user.user_id,
-    registry_id,
+    registry_id: user.registry_id || '',
     channel: 'email',
     otp_id: token.id,
   })

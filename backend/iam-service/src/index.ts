@@ -8,7 +8,7 @@
  *   /healthz, /readyz       — health probes
  */
 
-import 'dotenv/config'
+import './dotenv-config.js'
 import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
@@ -18,6 +18,7 @@ import { config } from './config.js'
 import { passwordResetRouter } from './routes/passwordReset.routes.js'
 import { loginRouter } from './routes/login.routes.js'
 import { keycloakLoginRouter } from './routes/keycloakLogin.routes.js'
+import { otpLoginRouter } from './routes/otpLogin.routes.js'
 import { mfaRouter } from './routes/mfa.routes.js'
 import { inviteRouter } from './routes/invite.routes.js'
 import { adminRouter } from './routes/admin.routes.js'
@@ -46,6 +47,7 @@ app.use(express.urlencoded({ extended: true }))
 app.use('/', healthRouter)                          // /healthz, /readyz
 app.use('/iam/password-reset', passwordResetRouter)  // /iam/password-reset/request, /confirm
 app.use('/iam/login', loginRouter)                   // /iam/login (HS256 - legacy)
+app.use('/iam/otp-login', otpLoginRouter)            // /iam/otp-login/request, /verify
 app.use('/iam/keycloak/login', keycloakLoginRouter)  // /iam/keycloak/login (RS256 - Keycloak)
 app.use('/iam/mfa', mfaRouter)                       // /iam/mfa/totp/*, /iam/mfa/email/*
 app.use('/iam/invite', inviteRouter)                 // /iam/invite
@@ -72,6 +74,8 @@ async function start() {
       console.log(`   Keycloak:    ${config.keycloak.baseUrl}/realms/${config.keycloak.realm}`)
       console.log(`   Endpoints:`)
       console.log(`     POST /iam/login`)
+      console.log(`     POST /iam/otp-login/request`)
+      console.log(`     POST /iam/otp-login/verify`)
       console.log(`     POST /iam/password-reset/request`)
       console.log(`     POST /iam/password-reset/confirm`)
       console.log(`     POST /iam/mfa/totp/enroll`)

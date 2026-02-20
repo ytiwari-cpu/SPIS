@@ -1,4 +1,4 @@
-import 'dotenv/config'
+import './dotenv-config.js'
 import express, { Request, Response } from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
@@ -18,7 +18,7 @@ import { requireAuth } from './middleware/requireAuth.js'
 import { testConnection } from './lib/supabase.js'
 
 const app = express()
-const PORT = process.env.PORT || 3001
+const PORT = process.env.FAMILY_SERVICE_PORT || process.env.PORT || 3001
 
 // Security middleware
 app.use(helmet())

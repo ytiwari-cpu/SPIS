@@ -9,7 +9,7 @@
  *   npm run worker:dev   — Development (tsx watch)
  */
 
-import 'dotenv/config'
+import './dotenv-config.js'
 import { startWorker } from './services/worker.js'
 import { logger } from './lib/logger.js'
 

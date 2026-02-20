@@ -76,6 +76,28 @@ export const authApi = {
   },
 
   /**
+   * Request OTP for login (proxied through family-service to IAM)
+   */
+  requestOtpLogin: async (nationalId: string): Promise<ApiResponse<{ message: string; otp_id: string; user_exists_in_iam: boolean }>> => {
+    const response = await api.post<ApiResponse<{ message: string; otp_id: string; user_exists_in_iam: boolean }>>(
+      '/auth/otp-login/request',
+      { national_id: nationalId }
+    )
+    return response.data
+  },
+
+  /**
+   * Verify OTP and login (proxied through family-service — enriched with family data)
+   */
+  verifyOtpLogin: async (credentials: { national_id: string; otp: string }): Promise<ApiResponse<AuthSession>> => {
+    const response = await api.post<ApiResponse<AuthSession>>(
+      '/auth/otp-login/verify',
+      credentials
+    )
+    return response.data
+  },
+
+  /**
    * Get current authenticated family details
    */
   getMe: async (): Promise<ApiResponse<DbFamilyWithDetails>> => {

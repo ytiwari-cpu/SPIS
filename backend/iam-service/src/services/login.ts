@@ -121,7 +121,7 @@ export async function loginWithCredentials(params: {
   // 6. Get user permissions
   const permissions = await getUserPermissions(user.user_id)
 
-  // 7. Generate JWT
+  // 7. Generate JWT with national_id for family service
   const secret = new TextEncoder().encode(config.jwt.secret)
   const now = Math.floor(Date.now() / 1000)
 
@@ -131,6 +131,7 @@ export async function loginWithCredentials(params: {
     roles,
     permissions,
     registry_id: user.registry_id || undefined,
+    national_id: nationalId, // Add national_id to JWT for family service /auth/me endpoint
   })
     .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
     .setIssuedAt(now)

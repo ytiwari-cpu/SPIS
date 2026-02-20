@@ -31,14 +31,14 @@ function envBool(key: string, fallback: boolean): boolean {
 
 export const config = {
   // ── Server ──────────────────────────────────────────────
-  port: envInt('PORT', 3003),
+  port: envInt('IAM_SERVICE_PORT', envInt('PORT', 3003)),
   nodeEnv: env('NODE_ENV', 'development'),
   corsOrigin: env('CORS_ORIGIN', 'http://localhost:3000'),
 
   // ── PostgreSQL (auth_db) ────────────────────────────────
-  databaseUrl: env('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/auth_db'),
-  dbPoolMin: envInt('DB_POOL_MIN', 2),
-  dbPoolMax: envInt('DB_POOL_MAX', 10),
+  databaseUrl: env('IAM_DATABASE_URL', env('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/auth_db')),
+  dbPoolMin: envInt('IAM_DB_POOL_MIN', envInt('DB_POOL_MIN', 2)),
+  dbPoolMax: envInt('IAM_DB_POOL_MAX', envInt('DB_POOL_MAX', 10)),
 
   // ── Redis ───────────────────────────────────────────────
   redisUrl: env('REDIS_URL', 'redis://localhost:6379'),

@@ -12,8 +12,12 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const { login, isAuthenticated, setFamilyDetails } = useAuthStore()
 
+  const [loginMode, setLoginMode] = useState<'password' | 'otp'>('password')
   const [nationalId, setNationalId] = useState('')
   const [password, setPassword] = useState('')
+  const [otp, setOtp] = useState('')
+  const [otpSent, setOtpSent] = useState(false)
+  const [otpId, setOtpId] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [showWorkerRegistration, setShowWorkerRegistration] = useState(false)
@@ -25,18 +29,32 @@ export default function LoginPage() {
   }, [isAuthenticated, navigate])
 
   const finalizeLogin = async (session: any) => {
-    login(session)
+    let patchedSession = { ...session }
+
+    // Temporarily persist token to sessionStorage so that the API interceptor
+    // can attach it as an Authorization header when calling getMe()
+    if (patchedSession.access_token) {
+      const tempStorage = {
+        state: { session: { access_token: patchedSession.access_token, family_id: patchedSession.family_id } },
+        version: 0,
+      }
+      sessionStorage.setItem('spis-auth-storage', JSON.stringify(tempStorage))
+    }
+
     try {
       const meResponse = await authApi.getMe()
       if (meResponse.success && meResponse.data) {
+        // Patch session with uuid and family_id from /auth/me
+        patchedSession.uuid = meResponse.data.uuid
+        patchedSession.family_id = meResponse.data.family_id
         setFamilyDetails(meResponse.data, meResponse.data.head_member || null)
       }
     } catch {
       // No family record (e.g. SuperAdmin/Worker) — continue without family details
     }
-
+    login(patchedSession)
     // Route based on role
-    const roles = session.roles || []
+    const roles = patchedSession.roles || []
     if (roles.includes('SuperAdmin') || roles.includes('Admin')) {
       navigate('/admin')
     } else {
@@ -85,9 +103,88 @@ export default function LoginPage() {
     }
   }
 
+  const handleRequestOtp = async () => {
+    const cleanNationalId = normalizeNationalId(nationalId)
+    if (cleanNationalId.length !== 14) {
+      setError('National ID must be exactly 14 digits')
+      return
+    }
+
+    setError('')
+    setIsLoading(true)
+
+    try {
+      const response = await authApi.requestOtpLogin(cleanNationalId)
+
+      if (response.success && response.data) {
+        setOtpSent(true)
+        setOtpId(response.data.otp_id)
+        setError('')
+      } else {
+        setError(response.error || 'Failed to send OTP')
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      if (message.includes('404')) {
+        setError('National ID not found in system')
+      } else if (message.includes('409')) {
+        setError('No email registered for this National ID')
+      } else {
+        setError(`Failed to send OTP: ${message}`)
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleVerifyOtp = async () => {
+    const cleanNationalId = normalizeNationalId(nationalId)
+    if (cleanNationalId.length !== 14) {
+      setError('National ID must be exactly 14 digits')
+      return
+    }
+    if (!otp || otp.length !== 6) {
+      setError('OTP must be 6 digits')
+      return
+    }
+
+    setError('')
+    setIsLoading(true)
+
+    try {
+      const response = await authApi.verifyOtpLogin({
+        national_id: cleanNationalId,
+        otp,
+      })
+
+      if (response.success && response.data) {
+        await finalizeLogin(response.data)
+      } else {
+        setError(response.error || 'OTP verification failed')
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      if (message.includes('400')) {
+        setError('Invalid OTP code. Please try again.')
+      } else if (message.includes('429')) {
+        setError('Too many attempts. Please request a new OTP.')
+      } else {
+        setError(`OTP verification failed: ${message}`)
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    handleNationalLogin()
+    if (loginMode === 'password') {
+      handleNationalLogin()
+    } else if (!otpSent) {
+      handleRequestOtp()
+    } else {
+      handleVerifyOtp()
+    }
   }
 
   return (
@@ -117,6 +214,47 @@ export default function LoginPage() {
         </div>
 
         <div className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-800">
+          {/* Login Mode Toggle */}
+          <div className="flex gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg mb-6">
+            <button
+              type="button"
+              onClick={() => {
+                setLoginMode('password')
+                setOtpSent(false)
+                setOtp('')
+                setError('')
+              }}
+              className={`flex-1 py-2 px-4 rounded-md font-medium transition-all ${loginMode === 'password'
+                  ? 'bg-white dark:bg-gray-700 text-primary shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                }`}
+            >
+              <span className="flex items-center justify-center gap-2">
+                <span className="material-symbols-outlined text-lg">lock</span>
+                Password
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLoginMode('otp')
+                setPassword('')
+                setOtpSent(false)
+                setOtp('')
+                setError('')
+              }}
+              className={`flex-1 py-2 px-4 rounded-md font-medium transition-all ${loginMode === 'otp'
+                  ? 'bg-white dark:bg-gray-700 text-primary shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                }`}
+            >
+              <span className="flex items-center justify-center gap-2">
+                <span className="material-symbols-outlined text-lg">mail</span>
+                OTP
+              </span>
+            </button>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
               <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm p-3 rounded-lg flex items-start gap-2">
@@ -126,40 +264,91 @@ export default function LoginPage() {
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label htmlFor="nationalId" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 National ID
               </label>
               <input
+                id="nationalId"
                 type="text"
                 value={nationalId}
                 onChange={(e) => setNationalId(e.target.value)}
                 placeholder="14-digit National ID"
-                className="w-full h-12 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 focus:ring-2 focus:ring-primary focus:border-transparent outline-none text-gray-900 dark:text-white font-mono text-sm"
+                disabled={otpSent}
+                className="w-full h-12 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 focus:ring-2 focus:ring-primary focus:border-transparent outline-none text-gray-900 dark:text-white font-mono text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 required
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Your password"
-                className="w-full h-12 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 focus:ring-2 focus:ring-primary focus:border-transparent outline-none text-gray-900 dark:text-white text-sm"
-                required
-              />
-              <div className="mt-2 text-right">
-                <Link
-                  to="/reset-password"
-                  className="text-sm text-primary hover:text-primary-dark font-medium"
-                >
-                  Forgot password?
-                </Link>
+            {loginMode === 'password' ? (
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Your password"
+                  className="w-full h-12 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 focus:ring-2 focus:ring-primary focus:border-transparent outline-none text-gray-900 dark:text-white text-sm"
+                  required
+                />
+                <div className="mt-2 text-right">
+                  <Link
+                    to="/reset-password"
+                    className="text-sm text-primary hover:text-primary-dark font-medium"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
               </div>
-            </div>
+            ) : otpSent ? (
+              <div>
+                <label htmlFor="otp" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  OTP Code
+                </label>
+                <input
+                  id="otp"
+                  type="text"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="Enter 6-digit OTP"
+                  maxLength={6}
+                  className="w-full h-12 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 focus:ring-2 focus:ring-primary focus:border-transparent outline-none text-gray-900 dark:text-white font-mono text-2xl text-center tracking-widest"
+                  required
+                />
+                <div className="mt-2 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOtpSent(false)
+                      setOtp('')
+                      setError('')
+                    }}
+                    className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                  >
+                    ← Change National ID
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRequestOtp}
+                    disabled={isLoading}
+                    className="text-sm text-primary hover:text-primary-dark font-medium disabled:opacity-50"
+                  >
+                    Resend OTP
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                <p className="text-sm text-blue-900 dark:text-blue-200 flex items-start gap-2">
+                  <span className="material-symbols-outlined text-lg shrink-0">info</span>
+                  <span>
+                    An OTP will be sent to your registered email address. Click "Send OTP" to continue.
+                  </span>
+                </p>
+              </div>
+            )}
 
             <button
               type="submit"
@@ -169,12 +358,16 @@ export default function LoginPage() {
               {isLoading ? (
                 <>
                   <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                  Signing in...
+                  {' '}
+                  {loginMode === 'otp' && otpSent ? 'Verifying...' : loginMode === 'otp' ? 'Sending OTP...' : 'Signing in...'}
                 </>
               ) : (
                 <>
-                  <span className="material-symbols-outlined">login</span>
-                  Sign In
+                  <span className="material-symbols-outlined">
+                    {loginMode === 'otp' && !otpSent ? 'mail' : 'login'}
+                  </span>
+                  {' '}
+                  {loginMode === 'otp' && !otpSent ? 'Send OTP' : loginMode === 'otp' ? 'Verify & Sign In' : 'Sign In'}
                 </>
               )}
             </button>
@@ -194,16 +387,24 @@ export default function LoginPage() {
           <div className="flex gap-3">
             <span className="material-symbols-outlined text-primary shrink-0">info</span>
             <p className="text-xs text-primary/80 dark:text-primary/90 leading-relaxed">
-              First time? Register your family, then use "Forgot password?" to create your login credentials using the National ID linked to your registration.
+              {loginMode === 'otp' ? (
+                <>
+                  <strong>OTP Login:</strong> Enter your National ID and we&apos;ll send a one-time password to your registered email. Use this if you don&apos;t have a password yet.
+                </>
+              ) : (
+                <>
+                  First time? Register your family, then use &quot;Forgot password?&quot; to create your login credentials using the National ID linked to your registration.
+                </>
+              )}
             </p>
           </div>
         </div>
       </div>
 
       {/* Worker Registration Modal */}
-      <WorkerRegistrationModal 
-        isOpen={showWorkerRegistration} 
-        onClose={() => setShowWorkerRegistration(false)} 
+      <WorkerRegistrationModal
+        isOpen={showWorkerRegistration}
+        onClose={() => setShowWorkerRegistration(false)}
       />
     </div>
   )

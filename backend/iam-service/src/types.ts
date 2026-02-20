@@ -16,7 +16,7 @@ export type MfaFactorStatus = 'pending' | 'active' | 'disabled'
 
 export type LoginOutcome = 'success' | 'fail_password' | 'fail_mfa' | 'fail_locked' | 'fail_disabled'
 
-export type OtpPurpose = 'password_reset' | 'mfa_email' | 'invite' | 'worker_registration'
+export type OtpPurpose = 'password_reset' | 'mfa_email' | 'invite' | 'worker_registration' | 'otp_login'
 
 // ═══════════════════════════════════════════════════════════════
 // DB ROW TYPES  (auth_db)
