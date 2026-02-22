@@ -12,6 +12,7 @@ import { devRouter } from './routes/dev.routes.js'
 import { authRouter } from './routes/auth.routes.js'
 import { registrationRouter } from './routes/registration.routes.js'
 import { uploadRouter } from './routes/upload.routes.js'
+import { citizensRouter } from './routes/citizens.routes.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { notFound } from './middleware/notFound.js'
 import { requireAuth } from './middleware/requireAuth.js'
@@ -60,6 +61,7 @@ app.use('/api/v1/families', requireAuth, familyRouter)
 app.use('/api/v1/members', requireAuth, memberRouter) // Protected member routes
 app.use('/api/v1/addresses', requireAuth, addressRouter)
 app.use('/api/v1/documents', requireAuth, documentRouter)
+app.use('/api/v1/citizens', requireAuth, citizensRouter)  // Admin-only citizens listing
 
 // DEV-ONLY routes
 if (process.env.NODE_ENV !== 'production') {

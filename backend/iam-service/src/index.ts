@@ -25,6 +25,7 @@ import { adminRouter } from './routes/admin.routes.js'
 import workerRegisterRouter from './routes/workerRegister.routes.js'
 import { healthRouter } from './routes/health.routes.js'
 import { errorHandler, notFound } from './middleware/errorHandler.js'
+import { auditMiddleware } from './middleware/audit.js'
 import { connectBus, closeBus } from './bus/rabbitmq.js'
 import { pool } from './db/pool.js'
 import { closeRedis } from './lib/redis.js'
@@ -42,6 +43,10 @@ app.use(morgan('combined'))
 // ── Body Parsing ────────────────────────────────────────────
 app.use(express.json({ limit: '1mb' }))
 app.use(express.urlencoded({ extended: true }))
+
+// ── Audit Logging ───────────────────────────────────────────
+// Logs all /iam/* API calls to audit_logs table (except health checks)
+app.use(auditMiddleware())
 
 // ── Routes ──────────────────────────────────────────────────
 app.use('/', healthRouter)                          // /healthz, /readyz

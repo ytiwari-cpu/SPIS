@@ -20,6 +20,7 @@ interface AuthState {
   clearError: () => void
   hasPermission: (permission: string) => boolean
   hasRole: (role: string) => boolean
+  refreshPermissions: () => Promise<void>
   
   // Legacy compatibility - uuid for routing, family_id for display
   user: { uuid: string; family_id: string; name: string } | null
@@ -27,7 +28,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // Initial state - NOT authenticated (no more mock data!)
       isAuthenticated: false,
       session: null,
@@ -38,15 +39,15 @@ export const useAuthStore = create<AuthState>()(
       user: null,
 
       // Login with session from API
-      login: (session) => {
+      login: (session: AuthSession) => {
         set({
           isAuthenticated: true,
           session,
           error: null,
-          user: { 
-            uuid: session.uuid, 
-            family_id: session.family_id, 
-            name: `Family ${session.family_id}` 
+          user: {
+            uuid: session.uuid || session.user_id || '',
+            family_id: session.family_id || '',
+            name: session.email || (session.family_id ? `Family ${session.family_id}` : 'User'),
           },
         })
       },
@@ -80,16 +81,38 @@ export const useAuthStore = create<AuthState>()(
       clearError: () => set({ error: null }),
 
       // Permission & role checks
-      hasPermission: (permission) => {
-        const state = useAuthStore.getState()
-        const permissions = state.session?.permissions || []
-        return permissions.includes(permission)
+      hasPermission: (permission: string): boolean => {
+        const session = get().session
+        if (!session || !session.permissions) return false
+        if (!Array.isArray(session.permissions)) return false
+        return session.permissions.includes(permission)
       },
 
-      hasRole: (role) => {
-        const state = useAuthStore.getState()
-        const roles = state.session?.roles || []
+      hasRole: (role: string): boolean => {
+        const roles = get().session?.roles || []
         return roles.includes(role)
+      },
+
+      // Refresh permissions from backend (for when roles/permissions change)
+      refreshPermissions: async (): Promise<void> => {
+        const currentSession = get().session
+        if (!currentSession?.access_token) return
+
+        try {
+          const { getMyPermissions } = await import('@/services/rbacApi')
+          const permissions = await getMyPermissions()
+          
+          // Update session with fresh permissions
+          set({
+            session: {
+              ...currentSession,
+              permissions,
+            },
+          })
+        } catch (error) {
+          console.error('Failed to refresh permissions:', error)
+          // Don't throw - permissions might be stale but user can still function
+        }
       },
     }),
     {
@@ -105,14 +128,14 @@ export const useAuthStore = create<AuthState>()(
 )
 
 // Helper hook to get UUID from session (for API calls)
-export const useFamilyUuid = () => {
-  const session = useAuthStore((state) => state.session)
+export const useFamilyUuid = (): string | null => {
+  const session = useAuthStore((state: AuthState) => state.session)
   return session?.uuid || null
 }
 
 // Helper hook to get family_id from session (for display)
-export const useFamilyId = () => {
-  const session = useAuthStore((state) => state.session)
+export const useFamilyId = (): string | null => {
+  const session = useAuthStore((state: AuthState) => state.session)
   return session?.family_id || null
 }
 

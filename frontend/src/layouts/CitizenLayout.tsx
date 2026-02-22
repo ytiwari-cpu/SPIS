@@ -29,7 +29,7 @@ const allBottomNavItems: NavItem[] = [
 export default function CitizenLayout() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, logout, hasPermission, hasRole } = useAuthStore()
+  const { user, logout, hasPermission } = useAuthStore()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
   // Filter navigation items based on user permissions
@@ -46,9 +46,6 @@ export default function CitizenLayout() {
       return hasPermission(item.requiredPermission)
     })
   }, [hasPermission])
-
-  // Check if user is admin
-  const isAdmin = hasRole('SuperAdmin') || hasRole('Admin')
 
   const handleLogout = () => {
     logout()
@@ -152,20 +149,6 @@ export default function CitizenLayout() {
               <span className="material-symbols-outlined">settings</span>
               <p className="text-sm font-medium">Settings</p>
             </Link>
-            {isAdmin && (
-              <Link
-                to="/admin"
-                onClick={() => setIsSidebarOpen(false)}
-                className={`flex h-12 items-center gap-3 rounded-lg px-4 transition-colors ${
-                  location.pathname === '/admin'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
-                }`}
-              >
-                <span className="material-symbols-outlined">admin_panel_settings</span>
-                <p className="text-sm font-medium">Admin</p>
-              </Link>
-            )}
             <button
               onClick={handleLogout}
               className="w-full flex h-12 items-center gap-3 rounded-lg px-4 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"

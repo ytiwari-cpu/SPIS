@@ -118,8 +118,21 @@ export async function loginWithCredentials(params: {
   const roleRows = await getUserRoles(user.user_id)
   const roles = roleRows.map((r) => r.role_name)
 
+  logger.info('User roles fetched', {
+    user_id: user.user_id,
+    email: user.email,
+    roleCount: roleRows.length,
+    roles,
+  })
+
   // 6. Get user permissions
   const permissions = await getUserPermissions(user.user_id)
+
+  logger.info('User permissions fetched', {
+    user_id: user.user_id,
+    permissionCount: permissions.length,
+    firstFive: permissions.slice(0, 5),
+  })
 
   // 7. Generate JWT with national_id for family service
   const secret = new TextEncoder().encode(config.jwt.secret)
@@ -128,10 +141,10 @@ export async function loginWithCredentials(params: {
   const accessToken = await new SignJWT({
     sub: user.user_id,
     email: user.email,
+    national_id: nationalId, // national_id included for family service /auth/me endpoint
     roles,
     permissions,
     registry_id: user.registry_id || undefined,
-    national_id: nationalId, // Add national_id to JWT for family service /auth/me endpoint
   })
     .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
     .setIssuedAt(now)

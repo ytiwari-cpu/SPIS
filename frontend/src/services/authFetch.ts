@@ -35,7 +35,8 @@ function getAuthHeaders(): Record<string, string> {
  * Authenticated fetch — wraps native fetch with auth headers.
  * Usage: `const res = await authFetch('/families/uuid-here')`
  *
- * Paths starting with "/" are prefixed with API_BASE.
+ * Paths starting with "/" are prefixed with API_BASE (for family-service).
+ * Paths starting with "/iam" are used as-is (for Vite proxy to iam-service).
  * Full URLs are used as-is.
  * 
  * Handles 401 responses by clearing auth and redirecting to login.
@@ -44,7 +45,20 @@ export async function authFetch(
   path: string,
   init?: RequestInit,
 ): Promise<Response> {
-  const url = path.startsWith('http') ? path : `${API_BASE}${path}`
+  // Determine the URL:
+  // - Full URLs (http/https) are used as-is
+  // - Paths starting with /iam go through Vite proxy (no prefix)
+  // - Other paths get API_BASE prefix
+  let url: string
+  if (path.startsWith('http')) {
+    url = path
+  } else if (path.startsWith('/iam')) {
+    // IAM service paths go through Vite proxy
+    url = path
+  } else {
+    url = `${API_BASE}${path}`
+  }
+  
   const authHeaders = getAuthHeaders()
 
   const response = await fetch(url, {

@@ -18,6 +18,7 @@ export interface AuthenticatedRequest extends Request {
     national_id: string
     email?: string
     roles?: string[]
+    permissions?: string[]  // ADDED: Permission-based authorization
     [key: string]: unknown
   }
 }
@@ -61,12 +62,13 @@ export async function requireAuth(
       return
     }
 
-    // Attach decoded user to request
+    // Attach decoded user to request (including permissions for authorization)
     req.user = {
       sub: payload.sub as string,
       national_id: payload.national_id as string,
       email: payload.email as string | undefined,
       roles: payload.roles as string[] | undefined,
+      permissions: payload.permissions as string[] | undefined,  // ADDED
     }
 
     next()
