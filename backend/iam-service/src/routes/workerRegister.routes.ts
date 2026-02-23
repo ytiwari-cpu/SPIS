@@ -20,14 +20,14 @@ const OTP_EXPIRY_MS = 10 * 60 * 1000 // 10 minutes
 interface WorkerRegisterRequest {
   national_id: string
   email: string
-  role: 'Admin' | 'CaseWorker' | 'SuperAdmin'
+  role: 'Admin' | 'CaseWorker' | 'SuperAdmin' | 'ProgrammeManager'
   secret_key: string
 }
 
 interface WorkerVerifyRequest {
   national_id: string
   email: string
-  role: 'Admin' | 'CaseWorker' | 'SuperAdmin'
+  role: 'Admin' | 'CaseWorker' | 'SuperAdmin' | 'ProgrammeManager'
   otp: string
   password: string
 }
@@ -64,7 +64,7 @@ router.post('/worker-register', async (req: Request, res: Response) => {
     }
 
     // 3. Validate role
-    if (!['Admin', 'CaseWorker', 'SuperAdmin'].includes(role)) {
+    if (!['Admin', 'CaseWorker', 'SuperAdmin', 'ProgrammeManager'].includes(role)) {
       return res.status(400).json({
         success: false,
         error: {
@@ -77,7 +77,7 @@ router.post('/worker-register', async (req: Request, res: Response) => {
     // 4. Check if user already exists
     const nationalIdHash = hashNationalId(national_id)
     const existingUser = await getUserByNationalIdHash(nationalIdHash)
-    
+
     if (existingUser) {
       return res.status(409).json({
         success: false,
@@ -169,7 +169,7 @@ router.post('/worker-register/verify', async (req: Request, res: Response) => {
     // 3. Find the temporary user by national_id_hash
     const nationalIdHash = hashNationalId(national_id)
     const tempUser = await getUserByNationalIdHash(nationalIdHash)
-    
+
     if (!tempUser) {
       return res.status(400).json({
         success: false,
@@ -183,7 +183,7 @@ router.post('/worker-register/verify', async (req: Request, res: Response) => {
     // 4. Get OTP token
     const { getActiveOtpToken, markOtpUsed, updateUserPassword, updateUserStatus } = await import('../db/repository.js')
     const { verifyOtp } = await import('../lib/crypto.js')
-    
+
     const otpToken = await getActiveOtpToken(tempUser.user_id, 'worker_registration')
     if (!otpToken) {
       return res.status(400).json({

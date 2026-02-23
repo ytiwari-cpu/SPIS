@@ -32,25 +32,32 @@ export const navConfig: NavItem[] = [
   { path: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
 
   // ── Citizen Features ─────────────────────────────────────────────────
-  { path: '/family',      label: 'My Family',   icon: 'family_restroom', requiredPermission: 'CITIZEN.FAMILY.VIEW',      section: 'Citizen' },
-  { path: '/profile',     label: 'My Profile',  icon: 'person',          requiredPermission: 'CITIZEN.PROFILE.VIEW' },
-  { path: '/documents',   label: 'Documents',   icon: 'description',     requiredPermission: 'CITIZEN.DOCUMENTS.VIEW' },
-  { path: '/programmes',  label: 'Programmes',  icon: 'verified_user',   requiredPermission: 'CITIZEN.PROGRAMMES.VIEW' },
-  { path: '/benefits',    label: 'Benefits',    icon: 'payments',        requiredPermission: 'CITIZEN.BENEFITS.VIEW' },
-  { path: '/grievances',  label: 'Grievances',  icon: 'error_outline',   requiredPermission: 'CITIZEN.GRIEVANCES.VIEW' },
+  { path: '/family', label: 'My Family', icon: 'family_restroom', requiredPermission: 'CITIZEN.FAMILY.VIEW', section: 'Citizen' },
+  { path: '/profile', label: 'My Profile', icon: 'person', requiredPermission: 'CITIZEN.PROFILE.VIEW' },
+  { path: '/documents', label: 'Documents', icon: 'description', requiredPermission: 'CITIZEN.DOCUMENTS.VIEW' },
+  { path: '/programmes', label: 'Programmes', icon: 'verified_user', requiredPermission: 'CITIZEN.PROGRAMMES.VIEW' },
+  { path: '/benefits', label: 'Benefits', icon: 'payments', requiredPermission: 'CITIZEN.BENEFITS.VIEW' },
+  { path: '/grievances', label: 'Grievances', icon: 'error_outline', requiredPermission: 'CITIZEN.GRIEVANCES.VIEW' },
 
   // ── Administration ───────────────────────────────────────────────────
-  { path: '/admin/overview',     label: 'Overview',        icon: 'analytics',            requiredPermission: 'ADMIN.OVERVIEW.VIEW',  section: 'Administration' },
-  { path: '/admin/families',     label: 'Families',        icon: 'family_restroom',      requiredPermission: 'ADMIN.FAMILIES.VIEW' },
-  { path: '/admin/programmes',   label: 'Programmes',      icon: 'verified_user',        requiredPermission: 'ADMIN.PROGRAMMES.VIEW' },
-  { path: '/admin/grievances',   label: 'Grievances',      icon: 'error_outline',        requiredPermission: 'ADMIN.GRIEVANCES.VIEW' },
-  { path: '/admin/appeals',      label: 'Appeals',         icon: 'gavel',                requiredPermission: 'ADMIN.APPEALS.VIEW' },
-  { path: '/admin/users',        label: 'Users',           icon: 'group',                requiredPermission: 'ADMIN.USERS.VIEW' },
-  { path: '/admin/case-workers', label: 'Case Workers',    icon: 'support_agent',        requiredPermission: 'ADMIN.CASEWORKERS.VIEW' },
+  { path: '/admin/overview', label: 'Overview', icon: 'analytics', requiredPermission: 'ADMIN.OVERVIEW.VIEW', section: 'Administration' },
+  { path: '/admin/families', label: 'Families', icon: 'family_restroom', requiredPermission: 'ADMIN.FAMILIES.VIEW' },
+  { path: '/admin/grievances', label: 'Grievances', icon: 'error_outline', requiredPermission: 'ADMIN.GRIEVANCES.VIEW' },
+  { path: '/admin/appeals', label: 'Appeals', icon: 'gavel', requiredPermission: 'ADMIN.APPEALS.VIEW' },
+  { path: '/admin/users', label: 'Users', icon: 'group', requiredPermission: 'ADMIN.USERS.VIEW' },
+  { path: '/admin/case-workers', label: 'Case Workers', icon: 'support_agent', requiredPermission: 'ADMIN.CASEWORKERS.VIEW' },
   { path: '/admin/admin-access', label: 'Admins & Access', icon: 'admin_panel_settings', requiredPermission: 'ADMIN.ACCESS.VIEW' },
-  { path: '/admin/roles',        label: 'Role Management', icon: 'lock_person',          requiredPermission: 'ADMIN.ROLES.VIEW' },
-  { path: '/admin/archived',     label: 'Archived',        icon: 'archive',              requiredPermission: 'ADMIN.ARCHIVED.VIEW' },
-  { path: '/admin/audit-logs',   label: 'Audit Logs',      icon: 'history',              requiredPermission: 'ADMIN.AUDITLOGS.VIEW' },
+  { path: '/admin/roles', label: 'Role Management', icon: 'lock_person', requiredPermission: 'ADMIN.ROLES.VIEW' },
+  { path: '/admin/archived', label: 'Archived', icon: 'archive', requiredPermission: 'ADMIN.ARCHIVED.VIEW' },
+  { path: '/admin/audit-logs', label: 'Audit Logs', icon: 'history', requiredPermission: 'ADMIN.AUDITLOGS.VIEW' },
+
+  // ── Programme Admin ─────────────────────────────────────────────────
+  { path: '/programme-admin/programmes', label: 'Programmes', icon: 'verified_user', requiredPermission: 'ADMIN.PROGRAMMES.VIEW' },
+  { path: '/programme-admin/beneficiaries', label: 'Beneficiaries', icon: 'group_add', requiredPermission: 'ADMIN.PROGRAMMES.VIEW' },
+  { path: '/programme-admin/payments', label: 'Payments', icon: 'credit_card', requiredPermission: 'ADMIN.PROGRAMMES.VIEW' },
+  { path: '/programme-admin/reports', label: 'Reports', icon: 'bar_chart', requiredPermission: 'ADMIN.PROGRAMMES.VIEW' },
+  { path: '/programme-admin/audit-logs', label: 'Audit Logs', icon: 'history', requiredPermission: 'ADMIN.PROGRAMMES.VIEW' },
+  { path: '/programme-admin/managers', label: 'Programme Settings', icon: 'settings', requiredPermission: 'ADMIN.PROGRAMMES.VIEW' },
 
   // ── Settings ─────────────────────────────────────────────────────────
   { path: '/settings', label: 'Settings', icon: 'settings', section: 'Account' },
@@ -58,8 +65,8 @@ export const navConfig: NavItem[] = [
 
 /** Bottom-bar items for mobile (subset of navConfig). */
 export const mobileBottomNav: NavItem[] = [
-  { path: '/dashboard',  label: 'Home',     icon: 'home' },
-  { path: '/family',     label: 'Family',   icon: 'family_restroom', requiredPermission: 'CITIZEN.FAMILY.VIEW' },
-  { path: '/benefits',   label: 'Benefits', icon: 'payments',        requiredPermission: 'CITIZEN.BENEFITS.VIEW' },
-  { path: '/settings',   label: 'More',     icon: 'more_horiz' },
+  { path: '/dashboard', label: 'Home', icon: 'home' },
+  { path: '/family', label: 'Family', icon: 'family_restroom', requiredPermission: 'CITIZEN.FAMILY.VIEW' },
+  { path: '/benefits', label: 'Benefits', icon: 'payments', requiredPermission: 'CITIZEN.BENEFITS.VIEW' },
+  { path: '/settings', label: 'More', icon: 'more_horiz' },
 ]

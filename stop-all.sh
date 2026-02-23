@@ -35,6 +35,7 @@ else
     lsof -ti:3001 | xargs kill -9 2>/dev/null && echo "   Stopped family-service (3001)"
     lsof -ti:3002 | xargs kill -9 2>/dev/null && echo "   Stopped email-service (3002)"
     lsof -ti:3003 | xargs kill -9 2>/dev/null && echo "   Stopped iam-service (3003)"
+    lsof -ti:3004 | xargs kill -9 2>/dev/null && echo "   Stopped programme-service (3004)"
     pkill -f "worker:dev" 2>/dev/null && echo "   Stopped email worker"
     
     echo ""

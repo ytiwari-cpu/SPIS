@@ -14,7 +14,7 @@ export default function WorkerRegistrationModal({ isOpen, onClose }: WorkerRegis
   const [formData, setFormData] = useState({
     national_id: '',
     email: '',
-    role: 'Admin' as 'Admin' | 'CaseWorker' | 'SuperAdmin',
+    role: 'Admin' as 'Admin' | 'CaseWorker' | 'SuperAdmin' | 'ProgrammeManager',
     secret_key: ''
   })
   const [verifyData, setVerifyData] = useState({
@@ -35,7 +35,7 @@ export default function WorkerRegistrationModal({ isOpen, onClose }: WorkerRegis
 
     try {
       const response = await axios.post(`${API_BASE_URL}/iam/worker-register`, formData)
-      
+
       if (response.data.success) {
         setStep('verify')
       }
@@ -70,14 +70,14 @@ export default function WorkerRegistrationModal({ isOpen, onClose }: WorkerRegis
         otp: verifyData.otp,
         password: verifyData.password
       })
-      
+
       if (response.data.success) {
         setSuccess(true)
         setTimeout(() => {
           onClose()
           // Reset form
           setStep('register')
-          setFormData({ national_id: '', email: '', role: 'Admin', secret_key: '' })
+          setFormData({ national_id: '', email: '', role: 'Admin' as 'Admin' | 'CaseWorker' | 'SuperAdmin' | 'ProgrammeManager', secret_key: '' })
           setVerifyData({ otp: '', password: '', confirmPassword: '' })
           setSuccess(false)
         }, 2000)
@@ -160,6 +160,7 @@ export default function WorkerRegistrationModal({ isOpen, onClose }: WorkerRegis
                   <option value="Admin">Admin</option>
                   <option value="CaseWorker">Case Worker</option>
                   <option value="SuperAdmin">Super Admin</option>
+                  <option value="ProgrammeManager">Programme Manager</option>
                 </select>
               </div>
 

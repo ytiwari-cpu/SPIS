@@ -16,7 +16,7 @@
  * A case is overdue if: status is NOT completed/closed AND dueDate < now
  */
 
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
   PageHeader,
@@ -31,7 +31,6 @@ import {
   type Column,
 } from '@/components/admin/shared'
 import {
-  programmes,
   grievances,
   appeals,
   admins,
@@ -41,6 +40,8 @@ import {
   type Case,
   type CaseStatus,
 } from '@/mock/superAdminMockData'
+import { getProgrammes } from '@/services/programmeApi'
+import type { Programme } from '@/types/programme'
 
 type BadgeVariant = 'default' | 'success' | 'warning' | 'error' | 'info' | 'primary'
 
@@ -97,7 +98,7 @@ function isOverdue(c: Case): boolean {
 function ProgressBar({ value, size = 'md' }: { value: number; size?: 'sm' | 'md' }) {
   const height = size === 'sm' ? 'h-1.5' : 'h-2'
   const bgColor = value >= 100 ? 'bg-green-500' : value >= 70 ? 'bg-blue-500' : value >= 40 ? 'bg-amber-500' : 'bg-gray-400'
-  
+
   return (
     <div className={`w-full ${height} bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden`}>
       <div
@@ -157,17 +158,28 @@ export default function AdminOverview() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
 
-  // Calculate programme stats
-  const totalProgrammes = programmes.length
-  const activeProgrammes = programmes.filter(p => p.status === 'ACTIVE').length
-  const totalEnrolled = programmes.reduce((sum, p) => sum + p.enrolledCount, 0)
-  const totalDisbursed = programmes.reduce((sum, p) => sum + p.benefitsDisbursed, 0)
-  
+  // Real programme data from API
+  const [realProgrammes, setRealProgrammes] = useState<Programme[]>([])
+  const [programmesLoading, setProgrammesLoading] = useState(true)
+
+  useEffect(() => {
+    getProgrammes()
+      .then(data => setRealProgrammes(data))
+      .catch(() => setRealProgrammes([]))
+      .finally(() => setProgrammesLoading(false))
+  }, [])
+
+  // Calculate programme stats from real data
+  const totalProgrammes = realProgrammes.length
+  const activeProgrammes = realProgrammes.filter(p => p.active_flag).length
+  const totalEnrolled = realProgrammes.reduce((sum, p) => sum + (p.programme_rules?.length ?? 0), 0)
+  const totalBudget = realProgrammes.reduce((sum, p) => sum + (p.programme_payment_settings?.total_budget_allocated ?? 0), 0)
+
   const openGrievances = grievances.filter(g => g.status === 'OPEN' || g.status === 'IN_PROGRESS').length
   const escalatedGrievances = grievances.filter(g => g.status === 'ESCALATED').length
-  
+
   const pendingAppeals = appeals.filter(a => a.status === 'PENDING' || a.status === 'UNDER_REVIEW').length
-  
+
   const activeAdmins = admins.filter(a => a.status === 'ACTIVE').length
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -326,7 +338,7 @@ export default function AdminOverview() {
 
   const quickLinks = [
     { label: 'Manage Families', icon: 'family_restroom', path: '/admin/families', color: 'bg-blue-500' },
-    { label: 'View Programmes', icon: 'verified_user', path: '/admin/programmes', color: 'bg-green-500' },
+    { label: 'Programme Admin', icon: 'verified_user', path: '/programme-admin', color: 'bg-green-500' },
     { label: 'Handle Grievances', icon: 'error_outline', path: '/admin/grievances', color: 'bg-amber-500' },
     { label: 'Review Appeals', icon: 'gavel', path: '/admin/appeals', color: 'bg-purple-500' },
     { label: 'Case Workers', icon: 'support_agent', path: '/admin/case-workers', color: 'bg-teal-500' },
@@ -370,7 +382,7 @@ export default function AdminOverview() {
           />
           <StatCard
             label="Benefits Disbursed"
-            value={formatCurrency(totalDisbursed)}
+            value={programmesLoading ? '...' : formatCurrency(totalBudget)}
             icon="payments"
             trend={{ value: 12, positive: true }}
           />

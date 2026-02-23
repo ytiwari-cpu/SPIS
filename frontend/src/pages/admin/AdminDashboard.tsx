@@ -20,12 +20,12 @@ interface QuickLink {
 }
 
 const quickLinks: QuickLink[] = [
-  { label: 'Overview',      description: 'Stats, cases & analytics',   icon: 'analytics',            path: '/admin/overview',     color: 'bg-blue-500' },
-  { label: 'Families',      description: 'View & manage families',     icon: 'family_restroom',      path: '/admin/families',     color: 'bg-emerald-500' },
-  { label: 'Programmes',    description: 'Manage social programmes',   icon: 'verified_user',        path: '/admin/programmes',   color: 'bg-purple-500' },
-  { label: 'Grievances',    description: 'Review submitted grievances', icon: 'error_outline',        path: '/admin/grievances',   color: 'bg-orange-500' },
-  { label: 'Case Workers',  description: 'Assign & manage workers',    icon: 'support_agent',        path: '/admin/case-workers', color: 'bg-cyan-500' },
-  { label: 'Role Management', description: 'Configure roles & permissions', icon: 'lock_person',     path: '/admin/roles',        color: 'bg-rose-500' },
+  { label: 'Overview', description: 'Stats, cases & analytics', icon: 'analytics', path: '/admin/overview', color: 'bg-blue-500' },
+  { label: 'Families', description: 'View & manage families', icon: 'family_restroom', path: '/admin/families', color: 'bg-emerald-500' },
+  { label: 'Programme Admin', description: 'Manage social programmes', icon: 'verified_user', path: '/programme-admin', color: 'bg-purple-500' },
+  { label: 'Grievances', description: 'Review submitted grievances', icon: 'error_outline', path: '/admin/grievances', color: 'bg-orange-500' },
+  { label: 'Case Workers', description: 'Assign & manage workers', icon: 'support_agent', path: '/admin/case-workers', color: 'bg-cyan-500' },
+  { label: 'Role Management', description: 'Configure roles & permissions', icon: 'lock_person', path: '/admin/roles', color: 'bg-rose-500' },
 ]
 
 export default function AdminDashboard() {

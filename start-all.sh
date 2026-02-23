@@ -57,15 +57,25 @@ cd ../..
 
 sleep 3
 
+# Start Programme Service (Port 3004)
+echo "📋 Starting Programme Service on port 3004..."
+cd backend/programme-service
+npm run dev > ../../logs/programme-service.log 2>&1 &
+PROGRAMME_PID=$!
+cd ../..
+
+sleep 2
+
 echo ""
 echo "✅ All backend services started!"
 echo ""
 echo "📊 Service Status:"
-echo "   Keycloak:        http://localhost:8080 (Docker: spis-keycloak)"
-echo "   Family Service:  http://localhost:3001 (PID: $FAMILY_PID)"
-echo "   Email Service:   http://localhost:3002 (PID: $EMAIL_PID)"
-echo "   IAM Service:     http://localhost:3003 (PID: $IAM_PID)"
-echo "   Email Worker:    Background (PID: $WORKER_PID)"
+echo "   Keycloak:           http://localhost:8080 (Docker: spis-keycloak)"
+echo "   Family Service:     http://localhost:3001 (PID: $FAMILY_PID)"
+echo "   Email Service:      http://localhost:3002 (PID: $EMAIL_PID)"
+echo "   IAM Service:        http://localhost:3003 (PID: $IAM_PID)"
+echo "   Programme Service:  http://localhost:3004 (PID: $PROGRAMME_PID)"
+echo "   Email Worker:       Background (PID: $WORKER_PID)"
 echo ""
 echo "📝 Logs are in ./logs/ directory"
 echo ""
@@ -76,6 +86,7 @@ echo ""
 echo "$FAMILY_PID" > logs/pids.txt
 echo "$EMAIL_PID" >> logs/pids.txt
 echo "$IAM_PID" >> logs/pids.txt
+echo "$PROGRAMME_PID" >> logs/pids.txt
 echo "$WORKER_PID" >> logs/pids.txt
 
 echo "Press Ctrl+C to view logs (services will continue running in background)"
