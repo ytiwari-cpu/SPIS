@@ -107,7 +107,6 @@ export default function CitizenLayout() {
             </div>
             <div>
               <p className="font-semibold text-gray-900 dark:text-white">{user?.name}</p>
-              <p className="text-xs text-gray-500">{user?.email}</p>
             </div>
           </div>
 

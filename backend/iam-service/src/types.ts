@@ -27,6 +27,7 @@ export type OtpPurpose = 'password_reset' | 'mfa_email' | 'invite' | 'worker_reg
 export interface UserRow {
   user_id: string           // UUID PK
   email: string             // login identifier
+  password_hash: string | null  // bcrypt hash; null until first password set
   mfa_enabled: boolean
   mfa_secret: string | null // encrypted TOTP secret
   status: UserStatus

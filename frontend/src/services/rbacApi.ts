@@ -425,7 +425,23 @@ export async function getAllPermissions(): Promise<PermissionsResponse> {
     throw new Error(json.error?.message || 'Failed to fetch permissions')
   }
   
-  return json.data as PermissionsResponse
+  // Backend returns a flat array (PermissionRow[]); normalize into PermissionsResponse
+  const raw = json.data
+  const permissions: Permission[] = Array.isArray(raw)
+    ? raw
+    : Array.isArray(raw?.permissions)
+      ? raw.permissions
+      : []
+
+  // Build byModule index
+  const byModule: Record<string, Permission[]> = {}
+  for (const perm of permissions) {
+    const mod = perm.module || perm.permission_key.split('.')[0]
+    if (!byModule[mod]) byModule[mod] = []
+    byModule[mod].push(perm)
+  }
+
+  return { permissions, byModule }
 }
 
 /**

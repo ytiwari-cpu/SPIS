@@ -2,7 +2,7 @@
  * Variable Catalog Routes — Manage available rule variables/fields
  */
 import { Router, Response } from 'express'
-import { AuthenticatedRequest, requireRole } from '../middleware/requireAuth.js'
+import { AuthenticatedRequest, requirePermission } from '../middleware/requireAuth.js'
 import { getAllVariables, getVariablesByCategory } from '../services/variableCatalog.js'
 
 export const variableRouter = Router()
@@ -47,8 +47,8 @@ variableRouter.get('/grouped', async (_req: AuthenticatedRequest, res: Response)
     }
 })
 
-// POST /api/v1/variables/refresh — Re-scan family DB (SuperAdmin only)
-variableRouter.post('/refresh', requireRole('SuperAdmin'), async (_req: AuthenticatedRequest, res: Response) => {
+// POST /api/v1/variables/refresh — Re-scan family DB (requires rules manage permission)
+variableRouter.post('/refresh', requirePermission('PROGRAMME.RULES.MANAGE', 'ADMIN.PROGRAMMES.EDIT'), async (_req: AuthenticatedRequest, res: Response) => {
     try {
         // In a full implementation, this would scan the family DB information_schema
         // and add any new columns. For now, we return the existing catalog.

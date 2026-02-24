@@ -31,7 +31,6 @@ export async function requireAuth(
     next: NextFunction,
 ): Promise<void> {
     const authHeader = req.headers.authorization
-
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         res.status(401).json({
             success: false,
@@ -91,6 +90,42 @@ export function requireRole(...allowedRoles: string[]) {
             res.status(403).json({
                 success: false,
                 error: `Requires one of: ${allowedRoles.join(', ')}`,
+            })
+            return
+        }
+        next()
+    }
+}
+
+/**
+ * Permission-checking middleware factory (OR semantics).
+ *
+ * Accepts one or more permission keys. Access is granted if the user has
+ * ANY ONE of the listed permissions.
+ *
+ * SuperAdmin role bypasses all permission checks (they have full access by
+ * design — this is intentional, not a bug; do NOT remove this bypass).
+ *
+ * Usage:
+ *   requirePermission('ADMIN.PROGRAMMES.VIEW', 'PROGRAMME.PROGRAMMES.VIEW')
+ */
+export function requirePermission(...requiredPerms: string[]) {
+    return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+        const userRoles = req.user?.roles || []
+        const userPerms = req.user?.permissions || []
+
+        // SuperAdmin bypasses ALL permission checks — this is by design.
+        // SuperAdmin is a god-mode account with unrestricted access.
+        if (userRoles.includes('SuperAdmin')) {
+            next()
+            return
+        }
+
+        const hasAny = requiredPerms.some(p => userPerms.includes(p))
+        if (!hasAny) {
+            res.status(403).json({
+                success: false,
+                error: `Insufficient permissions. Requires: ${requiredPerms.join(' or ')}`,
             })
             return
         }

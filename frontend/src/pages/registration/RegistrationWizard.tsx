@@ -2319,6 +2319,7 @@ export default function RegistrationWizard() {
           currentMemberIndex: 0,
           isLoading: false,
           error: null,
+          headData: null,
         })
         
         setIsEditMode(true)

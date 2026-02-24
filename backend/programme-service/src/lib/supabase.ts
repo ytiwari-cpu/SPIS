@@ -5,11 +5,12 @@ const programmeUrl = process.env.PROGRAMME_SUPABASE_URL
 const programmeServiceKey = process.env.PROGRAMME_SUPABASE_SERVICE_ROLE_KEY
 
 if (!programmeUrl || !programmeServiceKey) {
-    throw new Error('Missing Supabase environment variables: PROGRAMME_SUPABASE_URL and PROGRAMME_SUPABASE_SERVICE_ROLE_KEY')
+    console.warn('⚠️  Missing PROGRAMME_SUPABASE_URL / PROGRAMME_SUPABASE_SERVICE_ROLE_KEY — DB calls will fail')
 }
 
 /** Supabase client for programme schema */
-export const supabase = createClient(programmeUrl, programmeServiceKey, {
+export const supabase = (programmeUrl && programmeServiceKey)
+    ? createClient(programmeUrl, programmeServiceKey, {
     auth: {
         autoRefreshToken: false,
         persistSession: false,
@@ -18,6 +19,7 @@ export const supabase = createClient(programmeUrl, programmeServiceKey, {
         schema: 'programme',
     },
 })
+    : (null as any)
 
 // ─── Family Database Client (read-only cross-service access) ──────────────────
 const familyUrl = process.env.FAMILY_SUPABASE_URL

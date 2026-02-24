@@ -2,6 +2,13 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { AuthSession, DbFamily, DbFamilyMember } from '@/types/database'
 
+// ─── Cross-tab sync ────────────────────────────────────────────────────────
+// BroadcastChannel lets every same-origin tab know about login/logout events
+// without polling. Falls back gracefully (older browsers just skip it).
+const authChannel = typeof BroadcastChannel !== 'undefined'
+  ? new BroadcastChannel('spis-auth')
+  : null
+
 interface AuthState {
   // State
   isAuthenticated: boolean
@@ -19,6 +26,7 @@ interface AuthState {
   setError: (error: string | null) => void
   clearError: () => void
   hasPermission: (permission: string) => boolean
+  hasExplicitPermission: (permission: string) => boolean
   hasRole: (role: string) => boolean
   refreshPermissions: () => Promise<void>
   
@@ -29,7 +37,6 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      // Initial state - NOT authenticated (no more mock data!)
       isAuthenticated: false,
       session: null,
       familyDetails: null,
@@ -50,6 +57,8 @@ export const useAuthStore = create<AuthState>()(
             name: session.email || (session.family_id ? `Family ${session.family_id}` : 'User'),
           },
         })
+        // Notify other tabs about the new login
+        authChannel?.postMessage({ type: 'LOGIN' })
       },
 
       // Store additional family details after login
@@ -57,14 +66,16 @@ export const useAuthStore = create<AuthState>()(
         const name = headMember 
           ? `${headMember.first_name} ${headMember.last_name}` 
           : `Family ${family.family_id}`
-        set({
+        set((state) => ({
           familyDetails: family,
           headMember,
           user: { uuid: family.uuid, family_id: family.family_id, name },
-        })
+          // Also patch session.uuid so useFamilyUuid() always reflects the family
+          session: state.session ? { ...state.session, uuid: family.uuid, family_id: family.family_id } : state.session,
+        }))
       },
 
-      // Logout - clear all auth state
+      // Logout - clear all auth state and notify other tabs
       logout: () => {
         set({
           isAuthenticated: false,
@@ -74,6 +85,8 @@ export const useAuthStore = create<AuthState>()(
           error: null,
           user: null,
         })
+        // Notify other tabs so they also log out
+        authChannel?.postMessage({ type: 'LOGOUT' })
       },
 
       setLoading: (loading) => set({ isLoading: loading }),
@@ -83,8 +96,18 @@ export const useAuthStore = create<AuthState>()(
       // Permission & role checks
       hasPermission: (permission: string): boolean => {
         const session = get().session
-        if (!session || !session.permissions) return false
-        if (!Array.isArray(session.permissions)) return false
+        if (!session) return false
+        // SuperAdmin has all permissions
+        if (Array.isArray(session.roles) && session.roles.includes('SuperAdmin')) return true
+        if (!session.permissions || !Array.isArray(session.permissions)) return false
+        return session.permissions.includes(permission)
+      },
+
+      // Check permission strictly from the JWT — no SuperAdmin bypass.
+      // Use this for permissions that must be explicitly granted (e.g. SYSTEM.EXPORT).
+      hasExplicitPermission: (permission: string): boolean => {
+        const session = get().session
+        if (!session?.permissions || !Array.isArray(session.permissions)) return false
         return session.permissions.includes(permission)
       },
 
@@ -117,7 +140,9 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'spis-auth-storage',
-      storage: createJSONStorage(() => sessionStorage),
+      // localStorage is shared across all tabs in the same browser profile.
+      // sessionStorage is tab-isolated and would require re-login on every new tab.
+      storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         isAuthenticated: state.isAuthenticated,
         session: state.session,
@@ -126,6 +151,51 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 )
+
+// ─── Cross-tab sync listeners ──────────────────────────────────────────────
+// Listen for LOGOUT broadcast from other tabs and clear local state.
+if (authChannel) {
+  authChannel.onmessage = (event) => {
+    if (event.data?.type === 'LOGOUT') {
+      // Another tab logged out — clear state here without re-broadcasting
+      useAuthStore.setState({
+        isAuthenticated: false,
+        session: null,
+        familyDetails: null,
+        headMember: null,
+        error: null,
+        user: null,
+      })
+    }
+    // LOGIN events are handled automatically because both tabs share the same
+    // localStorage key — Zustand's persist middleware rehydrates on storage change.
+  }
+}
+
+// Fallback: listen for storage events (covers BroadcastChannel-unsupported browsers)
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key === 'spis-auth-storage' && event.newValue) {
+      try {
+        const parsed = JSON.parse(event.newValue)
+        if (parsed.state) {
+          useAuthStore.setState(parsed.state)
+        }
+      } catch { /* ignore parse errors */ }
+    }
+    // Key was deleted (logout from another tab)
+    if (event.key === 'spis-auth-storage' && event.newValue === null) {
+      useAuthStore.setState({
+        isAuthenticated: false,
+        session: null,
+        familyDetails: null,
+        headMember: null,
+        error: null,
+        user: null,
+      })
+    }
+  })
+}
 
 // Helper hook to get UUID from session (for API calls)
 export const useFamilyUuid = (): string | null => {

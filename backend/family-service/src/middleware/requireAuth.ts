@@ -35,7 +35,6 @@ export async function requireAuth(
   next: NextFunction,
 ): Promise<void> {
   const authHeader = req.headers.authorization
-
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     res.status(401).json({
       success: false,

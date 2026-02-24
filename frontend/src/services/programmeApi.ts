@@ -9,6 +9,7 @@ import type {
     RuleGroupRule,
     ProgrammeRule,
     Beneficiary,
+    BeneficiaryWithProgramme,
     CustomField,
     EvaluationResult,
     ImpactAnalysis,
@@ -22,7 +23,7 @@ const PROGRAMME_API = 'http://localhost:3004/api/v1'
 function getAuthHeaders(): Record<string, string> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     try {
-        const raw = sessionStorage.getItem('spis-auth-storage')
+        const raw = localStorage.getItem('spis-auth-storage')
         if (raw) {
             const stored = JSON.parse(raw)
             const token = stored.state?.session?.access_token
@@ -40,12 +41,13 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     })
 
     if (res.status === 401 && !globalThis.location.pathname.includes('/login')) {
-        sessionStorage.removeItem('spis-auth-storage')
+        localStorage.removeItem('spis-auth-storage')
         globalThis.location.href = '/login'
     }
 
     const json = await res.json()
-    if (!res.ok) throw new Error(json.error || json.message || 'API Error')
+    const errMsg = (typeof json.error === 'string' ? json.error : json.error?.message) || json.message || 'API Error'
+    if (!res.ok) throw new Error(errMsg)
     return json.data as T
 }
 
@@ -96,6 +98,9 @@ export const removeProgrammeRule = (programmeId: string, ruleId: string) =>
 // ─── Beneficiaries ────────────────────────────────────────────────────────────
 export const getBeneficiaries = (programmeId: string) =>
     apiFetch<Beneficiary[]>(`/beneficiaries/${programmeId}`)
+// Returns all beneficiary records for a given subject (family or individual UUID)
+export const getSubjectEnrollments = (subjectId: string) =>
+    apiFetch<BeneficiaryWithProgramme[]>(`/beneficiaries/subject/${subjectId}`)
 export const enrollBeneficiary = (programmeId: string, body: Record<string, unknown>) =>
     apiFetch<Beneficiary>(`/beneficiaries/${programmeId}`, { method: 'POST', body: JSON.stringify(body) })
 export const updateBeneficiaryStatus = (programmeId: string, subjectId: string, body: Record<string, unknown>) =>

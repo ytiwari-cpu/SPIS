@@ -9,43 +9,13 @@
  */
 
 import './dotenv-config.js'
-import express from 'express'
-import cors from 'cors'
-import helmet from 'helmet'
-import morgan from 'morgan'
-
+import { createApp } from './api.js'
 import { config } from './config.js'
-import { emailRouter } from './routes/email.routes.js'
-import { healthRouter, webhookRouter } from './routes/health.routes.js'
-import { errorHandler, notFound } from './middleware/errorHandler.js'
 import { connectBus, closeBus } from './bus/rabbitmq.js'
 import { pool } from './db/pool.js'
 import { logger } from './lib/logger.js'
 
-const app = express()
-
-// ── Security ────────────────────────────────────────────────
-app.use(helmet())
-app.use(cors({
-  origin: config.corsOrigin,
-  credentials: true,
-}))
-
-// ── Logging ─────────────────────────────────────────────────
-app.use(morgan('combined'))
-
-// ── Body Parsing ────────────────────────────────────────────
-app.use(express.json({ limit: '1mb' }))
-app.use(express.urlencoded({ extended: true }))
-
-// ── Routes ──────────────────────────────────────────────────
-app.use('/', healthRouter)                  // /healthz, /readyz
-app.use('/email', emailRouter)              // /email/otp, /email/invite, /email/notify
-app.use('/events', webhookRouter)           // /events/provider/bounce, /events/provider/delivery
-
-// ── Error Handling ──────────────────────────────────────────
-app.use(notFound)
-app.use(errorHandler)
+const app = createApp()
 
 // ── Startup ─────────────────────────────────────────────────
 async function start() {

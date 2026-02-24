@@ -27,7 +27,7 @@ const api = axios.create({
 
 // Request interceptor - add auth headers for authenticated requests
 api.interceptors.request.use((config) => {
-  const raw = sessionStorage.getItem('spis-auth-storage')
+  const raw = localStorage.getItem('spis-auth-storage')
   if (raw) {
     try {
       const stored = JSON.parse(raw)
@@ -58,7 +58,7 @@ api.interceptors.response.use(
 
       // Only redirect if not on login page and not an expected /me failure
       if (!isMeEndpoint && !globalThis.location.pathname.includes('/login')) {
-        sessionStorage.removeItem('spis-auth-storage')
+        localStorage.removeItem('spis-auth-storage')
         globalThis.location.href = '/login'
       }
     }
@@ -156,7 +156,7 @@ export const familyApi = {
    * Update family details
    */
   update: async (familyId: string, data: Partial<DbFamily>): Promise<ApiResponse<DbFamily>> => {
-    const response = await api.put<ApiResponse<DbFamily>>(`/families/${familyId}`, data)
+    const response = await api.patch<ApiResponse<DbFamily>>(`/families/${familyId}`, data)
     return response.data
   },
 

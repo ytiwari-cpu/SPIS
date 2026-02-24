@@ -126,6 +126,11 @@ export interface Beneficiary {
     created_at: string
 }
 
+/** Returned by GET /beneficiaries/subject/:subjectId — enrollment row with programme data embedded */
+export interface BeneficiaryWithProgramme extends Beneficiary {
+    programme: Programme
+}
+
 export interface CustomField {
     field_id: string
     field_name: string

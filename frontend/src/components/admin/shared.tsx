@@ -3,7 +3,14 @@
  * Reusable UI components for Super Admin dashboard pages
  */
 
-import { useState, useEffect, type ReactNode } from 'react'
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
+import {
+  type ImportColumn,
+  type ParsedImportResult,
+  parseAndValidateExcel,
+  downloadImportTemplate,
+  downloadErrorReport,
+} from '@/utils/excelUtils'
 
 // ════════════════════════════════════════════════════════════════════════════
 // DATA TABLE
@@ -751,4 +758,380 @@ export function useSort<T>(data: T[], defaultColumn?: keyof T) {
     sortDirection,
     handleSort,
   }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// EXPORT DROPDOWN
+// ════════════════════════════════════════════════════════════════════════════
+
+export { type ImportColumn }
+
+interface ExportDropdownProps {
+  onExportCSV: () => void
+  onExportExcel: () => void
+  /** If provided, an Import option is added to the dropdown */
+  onImport?: () => void
+  disabled?: boolean
+}
+
+export function ExportDropdown({ onExportCSV, onExportExcel, onImport, disabled = false }: ExportDropdownProps) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [open])
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        disabled={disabled}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <span className="material-symbols-outlined text-base">import_export</span>
+        {onImport ? 'Import / Export' : 'Export'}
+        <span className="material-symbols-outlined text-base">{open ? 'expand_less' : 'expand_more'}</span>
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-50 min-w-[185px] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 overflow-hidden">
+          {onImport && (
+            <>
+              <button
+                onClick={() => { onImport(); setOpen(false) }}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              >
+                <span className="material-symbols-outlined text-base text-blue-500">download</span>
+                Import from Excel
+              </button>
+              <div className="my-1 border-t border-gray-100 dark:border-gray-800" />
+            </>
+          )}
+          <button
+            onClick={() => { onExportCSV(); setOpen(false) }}
+            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          >
+            <span className="material-symbols-outlined text-base text-gray-400">upload</span>
+            Export as CSV
+          </button>
+          <button
+            onClick={() => { onExportExcel(); setOpen(false) }}
+            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          >
+            <span className="material-symbols-outlined text-base text-green-600">table_view</span>
+            Export as Excel
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// IMPORT MODAL
+// ════════════════════════════════════════════════════════════════════════════
+
+interface ImportModalProps {
+  isOpen: boolean
+  onClose: () => void
+  /** Called with the valid (fully-validated) rows after the user confirms */
+  onImport: (rows: Record<string, string>[]) => void
+  title: string
+  /** Column schema for validation and template generation */
+  columns: ImportColumn[]
+  /** Base filename used for template download and error report */
+  templateFilename: string
+}
+
+export function ImportModal({
+  isOpen,
+  onClose,
+  onImport,
+  title,
+  columns,
+  templateFilename,
+}: ImportModalProps) {
+  const [step, setStep] = useState<'upload' | 'preview'>('upload')
+  const [isDragging, setIsDragging] = useState(false)
+  const [fileName, setFileName] = useState('')
+  const [fileError, setFileError] = useState('')
+  const [result, setResult] = useState<ParsedImportResult | null>(null)
+  const [importing, setImporting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const reset = useCallback(() => {
+    setStep('upload')
+    setFileName('')
+    setFileError('')
+    setResult(null)
+    setImporting(false)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }, [])
+
+  const handleClose = () => { reset(); onClose() }
+
+  const processFile = (file: File) => {
+    setFileError('')
+    if (!file.name.match(/\.(xlsx|xls)$/i)) {
+      setFileError('Only .xlsx and .xls files are supported.')
+      return
+    }
+    setFileName(file.name)
+    parseAndValidateExcel(file, columns, (parsed) => {
+      if (parsed.totalRows === 0) {
+        setFileError('The file appears to be empty or could not be read.')
+        return
+      }
+      setResult(parsed)
+      setStep('preview')
+    })
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+    const file = e.dataTransfer.files[0]
+    if (file) processFile(file)
+  }
+
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) processFile(file)
+  }
+
+  const handleConfirmImport = () => {
+    if (!result) return
+    setImporting(true)
+    onImport(result.valid)
+    reset()
+    onClose()
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <Modal isOpen={isOpen} onClose={handleClose} title={title} size="lg" closeOnClickOutside={false}>
+      {step === 'upload' ? (
+        <div className="space-y-5">
+          {/* Template download banner */}
+          <div className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <div>
+              <p className="text-sm font-semibold text-blue-800 dark:text-blue-200">Step 1 — Download the template</p>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">Fill in the template file, then upload it below</p>
+            </div>
+            <button
+              onClick={() => downloadImportTemplate(templateFilename, columns)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-700 transition-colors shrink-0"
+            >
+              <span className="material-symbols-outlined text-base">download</span>
+              Download Template
+            </button>
+          </div>
+
+          {/* Column legend */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">Column reference</p>
+            <div className="flex flex-wrap gap-1.5">
+              {columns.map(col => (
+                <span
+                  key={col.key}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full ${
+                    col.required
+                      ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                      : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                  }`}
+                >
+                  {col.required && <span className="text-red-500 font-bold">*</span>}
+                  {col.label}
+                  {col.type === 'enum' && col.options && (
+                    <span className="text-gray-400 dark:text-gray-500 ml-0.5">
+                      ({col.options.join('/')})
+                    </span>
+                  )}
+                  {col.type === 'number' && col.min !== undefined && col.max !== undefined && (
+                    <span className="text-gray-400 dark:text-gray-500 ml-0.5">{col.min}–{col.max}</span>
+                  )}
+                </span>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5"><span className="text-red-500 font-bold">*</span> Required fields</p>
+          </div>
+
+          {/* Drop zone */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all ${
+              isDragging
+                ? 'border-primary bg-primary/5 dark:bg-primary/10'
+                : 'border-gray-300 dark:border-gray-700 hover:border-primary/50 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+            }`}
+          >
+            <span className="material-symbols-outlined text-5xl text-gray-300 dark:text-gray-600 mb-3 block">
+              {isDragging ? 'file_download' : 'upload_file'}
+            </span>
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              {isDragging ? 'Drop your file here' : 'Drag & drop your Excel file here'}
+            </p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">or click to browse — supports .xlsx and .xls</p>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleFileInput}
+            className="hidden"
+          />
+
+          {fileError && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+              <span className="material-symbols-outlined text-red-600 dark:text-red-400 text-base">error</span>
+              <p className="text-sm text-red-700 dark:text-red-300">{fileError}</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Summary cards */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-center">
+              <p className="text-2xl font-bold text-green-700 dark:text-green-300">{result?.valid.length ?? 0}</p>
+              <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">Valid rows</p>
+            </div>
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-center">
+              <p className="text-2xl font-bold text-red-700 dark:text-red-300">{result?.invalid.length ?? 0}</p>
+              <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">Invalid rows</p>
+            </div>
+            <div className="p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-center">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate" title={fileName}>{fileName}</p>
+              <button onClick={() => { reset() }} className="text-xs text-primary hover:underline mt-0.5">Change file</button>
+            </div>
+          </div>
+
+          {/* Invalid rows preview */}
+          {(result?.invalid.length ?? 0) > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-semibold text-red-700 dark:text-red-300">
+                  Rows with errors ({result!.invalid.length})
+                </p>
+                <button
+                  onClick={() => downloadErrorReport(templateFilename, columns, result!.invalid)}
+                  className="flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  <span className="material-symbols-outlined text-sm">download</span>
+                  Download error report
+                </button>
+              </div>
+              <div className="max-h-52 overflow-auto border border-red-200 dark:border-red-800 rounded-lg">
+                <table className="w-full text-xs">
+                  <thead className="bg-red-50 dark:bg-red-900/20 sticky top-0">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-semibold text-red-700 dark:text-red-300 whitespace-nowrap">Row #</th>
+                      {columns.slice(0, 3).map(c => (
+                        <th key={c.key} className="px-3 py-2 text-left font-semibold text-red-700 dark:text-red-300 whitespace-nowrap">{c.label}</th>
+                      ))}
+                      <th className="px-3 py-2 text-left font-semibold text-red-700 dark:text-red-300">Errors</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result!.invalid.map(({ row, data, errors }) => (
+                      <tr key={row} className="border-t border-red-100 dark:border-red-900/30 hover:bg-red-50/50 dark:hover:bg-red-900/10">
+                        <td className="px-3 py-2 font-mono text-red-600 dark:text-red-400">{row}</td>
+                        {columns.slice(0, 3).map(c => (
+                          <td key={c.key} className={`px-3 py-2 ${
+                            errors[c.key] ? 'text-red-600 dark:text-red-400 font-medium' : 'text-gray-600 dark:text-gray-400'
+                          }`}>
+                            {data[c.key] || <span className="text-gray-400">—</span>}
+                          </td>
+                        ))}
+                        <td className="px-3 py-2 text-red-600 dark:text-red-400">
+                          {Object.values(errors).join(' · ')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Valid rows preview (first 5) */}
+          {(result?.valid.length ?? 0) > 0 && (
+            <div>
+              <p className="text-sm font-semibold text-green-700 dark:text-green-300 mb-2">
+                Valid rows preview (first 5 of {result!.valid.length})
+              </p>
+              <div className="max-h-40 overflow-auto border border-green-200 dark:border-green-800 rounded-lg">
+                <table className="w-full text-xs">
+                  <thead className="bg-green-50 dark:bg-green-900/20 sticky top-0">
+                    <tr>
+                      {columns.map(c => (
+                        <th key={c.key} className="px-3 py-2 text-left font-semibold text-green-700 dark:text-green-300 whitespace-nowrap">{c.label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result!.valid.slice(0, 5).map((row, i) => (
+                      <tr key={i} className="border-t border-green-100 dark:border-green-900/30">
+                        {columns.map(c => (
+                          <td key={c.key} className="px-3 py-2 text-gray-700 dark:text-gray-300">
+                            {row[c.key] || <span className="text-gray-400">—</span>}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {(result?.valid.length ?? 0) === 0 && (
+            <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-center">
+              <span className="material-symbols-outlined text-3xl text-red-400 mb-2 block">error_outline</span>
+              <p className="text-sm font-medium text-red-700 dark:text-red-300">No valid rows found</p>
+              <p className="text-xs text-red-500 dark:text-red-400 mt-1">Fix the errors in the file and re-upload.</p>
+            </div>
+          )}
+
+          {/* Footer actions */}
+          <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-800">
+            <button
+              onClick={() => reset()}
+              className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+            >
+              ← Upload different file
+            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={handleClose}
+                className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmImport}
+                disabled={(result?.valid.length ?? 0) === 0 || importing}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-primary text-white hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-base">upload</span>
+                {importing ? 'Importing…' : `Import ${result?.valid.length ?? 0} row${(result?.valid.length ?? 0) !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </Modal>
+  )
 }

@@ -28,10 +28,17 @@ export function getPermissions(): string[] {
   return session.permissions
 }
 
+/** Returns true if the current user is a SuperAdmin (bypasses all permission checks) */
+function isSuperAdmin(): boolean {
+  const roles = useAuthStore.getState().session?.roles
+  return Array.isArray(roles) && roles.includes('SuperAdmin')
+}
+
 /**
  * Check if user has a specific permission
  */
 export function hasPermission(permission: string): boolean {
+  if (isSuperAdmin()) return true
   return getPermissions().includes(permission)
 }
 
@@ -40,6 +47,7 @@ export function hasPermission(permission: string): boolean {
  */
 export function hasAnyPermission(permissions: string[]): boolean {
   if (!permissions || permissions.length === 0) return true
+  if (isSuperAdmin()) return true
   const userPerms = getPermissions()
   return permissions.some(p => userPerms.includes(p))
 }
@@ -49,6 +57,7 @@ export function hasAnyPermission(permissions: string[]): boolean {
  */
 export function hasAllPermissions(permissions: string[]): boolean {
   if (!permissions || permissions.length === 0) return true
+  if (isSuperAdmin()) return true
   const userPerms = getPermissions()
   return permissions.every(p => userPerms.includes(p))
 }
@@ -58,6 +67,7 @@ export function hasAllPermissions(permissions: string[]): boolean {
  * Useful for section-level checks like "any ADMIN.*"
  */
 export function hasPermissionPrefix(prefix: string): boolean {
+  if (isSuperAdmin()) return true
   return getPermissions().some(p => p.startsWith(prefix))
 }
 
@@ -71,13 +81,17 @@ export function hasPermissionPrefix(prefix: string): boolean {
 export function usePermissions() {
   const session = useAuthStore(state => state.session)
   const permissions = session?.permissions || []
-  
+  const superAdmin = Array.isArray(session?.roles) && session.roles.includes('SuperAdmin')
+
   return {
     permissions,
-    hasPermission: (p: string) => permissions.includes(p),
-    hasAny: (ps: string[]) => ps.length === 0 || ps.some(p => permissions.includes(p)),
-    hasAll: (ps: string[]) => ps.length === 0 || ps.every(p => permissions.includes(p)),
-    hasPrefix: (prefix: string) => permissions.some(p => p.startsWith(prefix)),
+    hasPermission: (p: string) => superAdmin || permissions.includes(p),
+    hasAny: (ps: string[]) => ps.length === 0 || superAdmin || ps.some(p => permissions.includes(p)),
+    hasAll: (ps: string[]) => ps.length === 0 || superAdmin || ps.every(p => permissions.includes(p)),
+    hasPrefix: (prefix: string) => superAdmin || permissions.some(p => p.startsWith(prefix)),
+    // No SuperAdmin bypass — checks the actual JWT array.
+    // Use for permissions that must be explicitly granted (e.g. SYSTEM.EXPORT).
+    hasStrict: (p: string) => permissions.includes(p),
   }
 }
 
@@ -99,21 +113,29 @@ export const PERMISSIONS = {
   // Admin permissions
   ADMIN: {
     OVERVIEW: { VIEW: 'ADMIN.OVERVIEW.VIEW' },
-    FAMILIES: { VIEW: 'ADMIN.FAMILIES.VIEW', CREATE: 'ADMIN.FAMILIES.CREATE', EDIT: 'ADMIN.FAMILIES.EDIT', ARCHIVE: 'ADMIN.FAMILIES.ARCHIVE', EXPORT: 'ADMIN.FAMILIES.EXPORT' },
-    PROGRAMMES: { VIEW: 'ADMIN.PROGRAMMES.VIEW', CREATE: 'ADMIN.PROGRAMMES.CREATE', EDIT: 'ADMIN.PROGRAMMES.EDIT', ARCHIVE: 'ADMIN.PROGRAMMES.ARCHIVE', EXPORT: 'ADMIN.PROGRAMMES.EXPORT' },
+    FAMILIES: { VIEW: 'ADMIN.FAMILIES.VIEW', CREATE: 'ADMIN.FAMILIES.CREATE', EDIT: 'ADMIN.FAMILIES.EDIT', ARCHIVE: 'ADMIN.FAMILIES.ARCHIVE' },
+    PROGRAMMES: { VIEW: 'ADMIN.PROGRAMMES.VIEW', CREATE: 'ADMIN.PROGRAMMES.CREATE', EDIT: 'ADMIN.PROGRAMMES.EDIT', ARCHIVE: 'ADMIN.PROGRAMMES.ARCHIVE' },
     GRIEVANCES: { VIEW: 'ADMIN.GRIEVANCES.VIEW', CREATE: 'ADMIN.GRIEVANCES.CREATE', EDIT: 'ADMIN.GRIEVANCES.EDIT', ARCHIVE: 'ADMIN.GRIEVANCES.ARCHIVE', ASSIGN: 'ADMIN.GRIEVANCES.ASSIGN' },
     APPEALS: { VIEW: 'ADMIN.APPEALS.VIEW', EDIT: 'ADMIN.APPEALS.EDIT', REVIEW: 'ADMIN.APPEALS.REVIEW', ARCHIVE: 'ADMIN.APPEALS.ARCHIVE' },
     USERS: { VIEW: 'ADMIN.USERS.VIEW', CREATE: 'ADMIN.USERS.CREATE', EDIT: 'ADMIN.USERS.EDIT', DELETE: 'ADMIN.USERS.DELETE' },
     CASEWORKERS: { VIEW: 'ADMIN.CASEWORKERS.VIEW', CREATE: 'ADMIN.CASEWORKERS.CREATE', EDIT: 'ADMIN.CASEWORKERS.EDIT', DELETE: 'ADMIN.CASEWORKERS.DELETE', ASSIGN: 'ADMIN.CASEWORKERS.ASSIGN' },
     ACCESS: { VIEW: 'ADMIN.ACCESS.VIEW', CREATE: 'ADMIN.ACCESS.CREATE', EDIT: 'ADMIN.ACCESS.EDIT', DELETE: 'ADMIN.ACCESS.DELETE', MANAGE_PERMISSIONS: 'ADMIN.ACCESS.MANAGE_PERMISSIONS' },
     ROLES: { VIEW: 'ADMIN.ROLES.VIEW', CREATE: 'ADMIN.ROLES.CREATE', EDIT: 'ADMIN.ROLES.EDIT', DELETE: 'ADMIN.ROLES.DELETE', MANAGE_PERMISSIONS: 'ADMIN.ROLES.MANAGE_PERMISSIONS' },
-    ARCHIVED: { VIEW: 'ADMIN.ARCHIVED.VIEW', RESTORE: 'ADMIN.ARCHIVED.RESTORE', DELETE: 'ADMIN.ARCHIVED.DELETE' },
-    AUDITLOGS: { VIEW: 'ADMIN.AUDITLOGS.VIEW', EXPORT: 'ADMIN.AUDITLOGS.EXPORT' },
+    AUDITLOGS: { VIEW: 'ADMIN.AUDITLOGS.VIEW' },
   },
-  // System permissions
+  // Programme Management permissions (Programme Admin section)
+  PROGRAMME: {
+    PROGRAMMES:    { VIEW: 'PROGRAMME.PROGRAMMES.VIEW', CREATE: 'PROGRAMME.PROGRAMMES.CREATE', EDIT: 'PROGRAMME.PROGRAMMES.EDIT', DELETE: 'PROGRAMME.PROGRAMMES.DELETE', PUBLISH: 'PROGRAMME.PROGRAMMES.PUBLISH' },
+    BENEFICIARIES: { VIEW: 'PROGRAMME.BENEFICIARIES.VIEW', ENROLL: 'PROGRAMME.BENEFICIARIES.ENROLL', MANAGE: 'PROGRAMME.BENEFICIARIES.MANAGE' },
+    RULES:         { VIEW: 'PROGRAMME.RULES.VIEW', MANAGE: 'PROGRAMME.RULES.MANAGE' },
+    REPORTS:       { VIEW: 'PROGRAMME.REPORTS.VIEW' },
+    MANAGERS:      { VIEW: 'PROGRAMME.MANAGERS.VIEW', MANAGE: 'PROGRAMME.MANAGERS.MANAGE' },
+    ENGINE:        { RUN: 'PROGRAMME.ENGINE.RUN' },
+    AUDITLOGS:     { VIEW: 'PROGRAMME.AUDITLOGS.VIEW' },
+  },
+  // System-level cross-cutting permissions
   SYSTEM: {
-    EXPORT: { ALL: 'SYSTEM.EXPORT.ALL' },
-    REPORTS: { VIEW: 'SYSTEM.REPORTS.VIEW', CREATE: 'SYSTEM.REPORTS.CREATE' },
+    EXPORT: 'SYSTEM.EXPORT',
   },
 } as const
 
@@ -121,5 +143,5 @@ export const PERMISSIONS = {
 export const SECTION_PREFIXES = {
   Citizen: 'CITIZEN.',
   Administration: 'ADMIN.',
-  System: 'SYSTEM.',
+  Programme: 'PROGRAMME.',
 } as const

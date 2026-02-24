@@ -82,6 +82,13 @@ export async function updateUserEmail(userId: string, email: string): Promise<vo
   )
 }
 
+export async function updateUserPassword(userId: string, passwordHash: string): Promise<void> {
+  await pool.query(
+    'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE user_id = $2',
+    [passwordHash, userId]
+  )
+}
+
 export async function updateUserMfa(userId: string, enabled: boolean, secret?: string | null): Promise<void> {
   await pool.query(
     'UPDATE users SET mfa_enabled = $1, mfa_secret = $2 WHERE user_id = $3',

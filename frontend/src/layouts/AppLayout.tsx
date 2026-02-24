@@ -12,7 +12,8 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useMemo } from 'react'
 import { useAuthStore } from '@/store/authStore'
 import { navConfig, mobileBottomNav, type NavItem } from '@/config/navConfig'
-import { usePermissions, SECTION_PREFIXES } from '@/lib/auth'
+import { usePermissions } from '@/lib/auth'
+import { getHiddenNavPaths, getUserMode } from '@/lib/moduleResolver'
 
 export default function AppLayout() {
   const location = useLocation()
@@ -42,58 +43,68 @@ export default function AppLayout() {
     })
   }
 
-  // ── Portal label derived from PERMISSIONS (not roles) ─────────────
-  // If user has admin permissions → admin portal
-  // Otherwise → citizen portal
+  // ── Portal label derived from user mode (permission-based, not role-based) ─
   const portalLabel = useMemo(() => {
-    // Check permission prefixes to determine portal type
-    const hasAdminPerms = hasPrefix(SECTION_PREFIXES.Administration)
-    const hasCitizenPerms = hasPrefix(SECTION_PREFIXES.Citizen)
-    
-    if (hasAdminPerms && !hasCitizenPerms) return 'Administration Portal'
-    if (hasCitizenPerms && !hasAdminPerms) return 'Citizen Portal'
-    if (hasAdminPerms && hasCitizenPerms) return 'SPIS Portal'
-    return 'SPIS Portal'
-  }, [hasPrefix])
+    const mode = getUserMode(hasPrefix, hasPermission)
+    if (mode === 'ADMIN')      return 'Administration Portal'
+    if (mode === 'PROGRAMME')  return 'Programme Portal'
+    return 'Citizen Portal'
+  }, [hasPermission, hasPrefix])
+
+  // ── Module deduplication: hide citizen variants when admin variant exists ──
+  const hiddenPaths = useMemo(
+    () => getHiddenNavPaths(hasPermission),
+    [hasPermission],
+  )
 
   // ── Permission check for a nav item ────────────────────────────────
   const canAccess = (item: NavItem): boolean => {
-    // Always allow items with no permission requirement (Dashboard, Settings)
     if (!item.requiredPermission) return true
-    // Check if user has the required permission
-    return hasPermission(item.requiredPermission)
+    // OR semantics: string[] means ANY one permission grants access
+    const perms = Array.isArray(item.requiredPermission)
+      ? item.requiredPermission
+      : [item.requiredPermission]
+    return perms.some(p => hasPermission(p))
   }
 
-  // ── Filter nav items: HIDE items user cannot access ─────────────────────
+  // ── Filter nav items: permission check + admin-priority deduplication ────
   const filteredNavConfig = useMemo(() => {
-    if (!session) return [] // Not logged in
-    
-    // Build filtered list: only keep items user can access
+    if (!session) return []
+
     const accessibleItems: NavItem[] = []
     const sectionsAdded = new Set<string>()
-    
-    navConfig.forEach(item => {
-      // Check if user can access this item
-      const hasAccess = canAccess(item)
-      
-      // Only include items the user can access
-      if (hasAccess) {
-        // If this item has a section and we haven't added the section marker yet
-        if (item.section && !sectionsAdded.has(item.section)) {
-          sectionsAdded.add(item.section)
-        }
-        accessibleItems.push(item)
-      }
-    })
-    
-    return accessibleItems
-  }, [session, hasPermission]) // eslint-disable-line react-hooks/exhaustive-deps
+    let pendingSection: string | undefined
 
-  // ── Mobile bottom nav: only show items user can access ─────────────
+    navConfig.forEach(item => {
+      const hasAccess = canAccess(item)
+
+      // Skip items user can't access, or citizen duplicates hidden by admin priority
+      if (!hasAccess || hiddenPaths.has(item.path)) {
+        // Preserve section markers from hidden items for the next visible item
+        if (item.section) pendingSection = item.section
+        return
+      }
+
+      // Propagate section from a hidden item to the next visible item
+      const itemToAdd = (pendingSection && !item.section)
+        ? { ...item, section: pendingSection }
+        : item
+      pendingSection = undefined
+
+      if (itemToAdd.section && !sectionsAdded.has(itemToAdd.section)) {
+        sectionsAdded.add(itemToAdd.section)
+      }
+      accessibleItems.push(itemToAdd)
+    })
+
+    return accessibleItems
+  }, [session, hasPermission, hiddenPaths]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Mobile bottom nav: permission check + admin-priority dedup ─────
   const visibleBottomNav = useMemo(
-    () => mobileBottomNav.filter(canAccess),
+    () => mobileBottomNav.filter(item => canAccess(item) && !hiddenPaths.has(item.path)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [session],
+    [session, hiddenPaths],
   )
 
   const isActivePath = (path: string) => {

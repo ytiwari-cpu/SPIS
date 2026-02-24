@@ -10,17 +10,24 @@ import { useAuthStore } from '@/store/authStore'
 import ForbiddenPage from '@/pages/ForbiddenPage'
 
 interface PermissionGuardProps {
-  /** The permission key required (e.g. "ADMIN.FAMILIES.VIEW"). */
-  permission: string
+  /**
+   * Permission key(s) required to access this route.
+   *   string   → single permission check
+   *   string[] → OR semantics (any one grants access)
+   */
+  permission: string | string[]
   children: React.ReactNode
 }
 
 export default function PermissionGuard({ permission, children }: PermissionGuardProps) {
   const { hasPermission } = useAuthStore()
 
-  if (!hasPermission(permission)) {
-    return <ForbiddenPage requiredPermission={permission} />
+  // hasPermission() already bypasses for SuperAdmin internally —
+  // no role-name check needed here.
+  const perms = Array.isArray(permission) ? permission : [permission]
+  if (perms.some(p => hasPermission(p))) {
+    return <>{children}</>
   }
 
-  return <>{children}</>
+  return <ForbiddenPage requiredPermission={perms.join(' or ')} />
 }

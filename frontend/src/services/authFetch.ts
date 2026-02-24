@@ -13,7 +13,7 @@ function getAuthHeaders(): Record<string, string> {
   }
 
   try {
-    const raw = sessionStorage.getItem('spis-auth-storage')
+    const raw = localStorage.getItem('spis-auth-storage')
     if (raw) {
       const stored = JSON.parse(raw)
       const session = stored.state?.session
@@ -71,7 +71,7 @@ export async function authFetch(
 
   // Handle token expiry
   if (response.status === 401 && !globalThis.location.pathname.includes('/login')) {
-    sessionStorage.removeItem('spis-auth-storage')
+    localStorage.removeItem('spis-auth-storage')
     globalThis.location.href = '/login'
   }
 
@@ -91,7 +91,7 @@ export async function authUpload(
   const headers: Record<string, string> = {}
 
   try {
-    const raw = sessionStorage.getItem('spis-auth-storage')
+    const raw = localStorage.getItem('spis-auth-storage')
     if (raw) {
       const stored = JSON.parse(raw)
       const session = stored.state?.session
@@ -107,7 +107,7 @@ export async function authUpload(
 
   // Handle token expiry
   if (response.status === 401 && !globalThis.location.pathname.includes('/login')) {
-    sessionStorage.removeItem('spis-auth-storage')
+    localStorage.removeItem('spis-auth-storage')
     globalThis.location.href = '/login'
   }
 
@@ -115,3 +115,17 @@ export async function authUpload(
 }
 
 export { API_BASE }
+
+/**
+ * Normalize an API error field that may be a string or a { code, message } object.
+ * Prevents [object Object] showing in UI when backend returns structured errors.
+ */
+export function extractApiError(err: unknown, fallback = 'Request failed'): string {
+  if (!err) return fallback
+  if (typeof err === 'string') return err || fallback
+  if (typeof err === 'object' && err !== null) {
+    const msg = (err as Record<string, unknown>).message
+    if (typeof msg === 'string' && msg) return msg
+  }
+  return fallback
+}

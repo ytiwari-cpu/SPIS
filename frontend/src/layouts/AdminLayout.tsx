@@ -8,6 +8,8 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useAuthStore } from '@/store/authStore'
+import { usePermissions } from '@/lib/auth'
+import { getUserMode } from '@/lib/moduleResolver'
 
 const navItems = [
   { path: '/admin', label: 'Dashboard', icon: 'dashboard' },
@@ -20,28 +22,24 @@ const navItems = [
   { path: '/admin/admin-access', label: 'Admins & Access', icon: 'admin_panel_settings', admin: true },
   { path: '/admin/roles', label: 'Role Management', icon: 'lock_person', admin: true },
   { path: '/admin/case-workers', label: 'Case Workers', icon: 'support_agent' },
-  { path: '/admin/archived', label: 'Archived', icon: 'archive', admin: true },
   { path: '/admin/audit-logs', label: 'Audit Logs', icon: 'history', admin: true },
 ]
 
 export default function AdminLayout() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, logout, hasRole } = useAuthStore()
+  const { user, logout } = useAuthStore()
+  const { hasPrefix, hasPermission } = usePermissions()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
-  const isAdmin = hasRole('Admin') || hasRole('SuperAdmin')
+  const isAdmin = hasPermission('ADMIN.OVERVIEW.VIEW')
 
-  // Derive portal label from actual role
-  const portalLabel = hasRole('SuperAdmin')
-    ? 'Super Admin Portal'
-    : hasRole('Admin')
-    ? 'Admin Portal'
-    : hasRole('ProgrammeManager')
-    ? 'Programme Manager Portal'
-    : hasRole('CaseWorker')
-    ? 'Case Worker Portal'
-    : 'Staff Portal'
+  // Derive portal label from permissions, not role names
+  const mode = getUserMode(hasPrefix, hasPermission)
+  const portalLabel =
+    mode === 'ADMIN' ? 'Administration Portal' :
+    mode === 'PROGRAMME' ? 'Programme Portal' :
+    'Staff Portal'
 
   // Filter nav items based on role
   const visibleNavItems = navItems.filter(item => !item.admin || isAdmin)

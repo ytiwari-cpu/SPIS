@@ -1,22 +1,14 @@
 /**
  * COMMON GRIEVANCES VIEW
  *
- * Role-based wrapper component for grievances pages.
- * - Admin/SuperAdmin → shows admin grievance management (AdminGrievances)
- * - Citizen → shows citizen grievance submittal and tracking
+ * Permission-based wrapper for grievances pages.
+ * Delegates to CommonGrievances which selects the correct variant.
+ *
+ * Kept as a thin re-export for backward compatibility.
  */
 
-import { usePermissions, SECTION_PREFIXES } from '@/lib/auth'
-import AdminGrievances from '@/pages/superadmin/AdminGrievances'
-import CitizenGrievances from '@/pages/citizen/Grievances'
+import CommonGrievances from '@/components/common/CommonGrievances'
 
 export default function GrievancesView() {
-    const { hasPrefix } = usePermissions()
-    const isAdmin = hasPrefix(SECTION_PREFIXES.Administration)
-
-    if (isAdmin) {
-        return <AdminGrievances />
-    }
-
-    return <CitizenGrievances />
+    return <CommonGrievances />
 }

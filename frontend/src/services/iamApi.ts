@@ -66,7 +66,7 @@ const iamClient = axios.create({
 iamClient.interceptors.request.use((config) => {
   // Only add auth header for admin endpoints
   if (config.url?.includes('/admin/')) {
-    const storedAuth = sessionStorage.getItem('spis-auth-storage')
+    const storedAuth = localStorage.getItem('spis-auth-storage')
     if (storedAuth) {
       try {
         const parsed = JSON.parse(storedAuth)
@@ -94,7 +94,7 @@ iamClient.interceptors.response.use(
       const hasAuthHeader = error.config?.headers?.Authorization
       if (hasAuthHeader) {
         // Token was invalid/expired - clear session and redirect
-        sessionStorage.removeItem('spis-auth-storage')
+        localStorage.removeItem('spis-auth-storage')
         globalThis.location.href = '/login'
       }
     }

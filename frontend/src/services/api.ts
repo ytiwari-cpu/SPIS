@@ -27,7 +27,7 @@ const apiClient = axios.create({
 
 // Request interceptor for auth token
 apiClient.interceptors.request.use((config) => {
-  const token = sessionStorage.getItem('spis-auth-storage')
+  const token = localStorage.getItem('spis-auth-storage')
   if (token) {
     try {
       const parsed = JSON.parse(token)
@@ -50,7 +50,7 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 && !globalThis.location.pathname.includes('/login')) {
-      sessionStorage.removeItem('spis-auth-storage')
+      localStorage.removeItem('spis-auth-storage')
       globalThis.location.href = '/login'
     }
     return Promise.reject(error)

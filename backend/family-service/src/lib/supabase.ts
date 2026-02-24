@@ -4,7 +4,7 @@ const supabaseUrl = process.env.FAMILY_SUPABASE_URL || process.env.SUPABASE_URL
 const supabaseServiceKey = process.env.FAMILY_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.FAMILY_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error('Missing Supabase environment variables: FAMILY_SUPABASE_URL and FAMILY_SUPABASE_SERVICE_ROLE_KEY')
+  console.warn('⚠️  Missing FAMILY_SUPABASE_URL / FAMILY_SUPABASE_SERVICE_ROLE_KEY — DB calls will fail')
 }
 
 if (process.env.FAMILY_SUPABASE_SERVICE_ROLE_KEY === process.env.FAMILY_SUPABASE_ANON_KEY) {
@@ -23,23 +23,27 @@ if (process.env.FAMILY_SUPABASE_SERVICE_ROLE_KEY === process.env.FAMILY_SUPABASE
  */
 
 // Main Supabase client - uses 'family' schema if exposed, otherwise falls back
-export const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-  },
-  db: {
-    schema: 'family', // Requires 'family' schema to be exposed in Supabase Dashboard
-  },
-})
+export const supabase = (supabaseUrl && supabaseServiceKey)
+  ? createClient(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+    db: {
+      schema: 'family', // Requires 'family' schema to be exposed in Supabase Dashboard
+    },
+  })
+  : (null as any)
 
 // Client for public schema (for RPC calls and other operations)
-export const supabasePublic = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-  },
-})
+export const supabasePublic = (supabaseUrl && supabaseServiceKey)
+  ? createClient(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  })
+  : (null as any)
 
 // Test database connection
 export async function testConnection(): Promise<{ success: boolean; error?: string }> {

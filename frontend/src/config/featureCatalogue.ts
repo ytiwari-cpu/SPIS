@@ -147,7 +147,6 @@ export const featureCatalogue: FeatureCatalogue = {
             { key: 'ADMIN.FAMILIES.CREATE', label: 'Create', description: 'Create families' },
             { key: 'ADMIN.FAMILIES.EDIT', label: 'Edit', description: 'Edit families' },
             { key: 'ADMIN.FAMILIES.ARCHIVE', label: 'Archive', description: 'Archive families' },
-            { key: 'ADMIN.FAMILIES.EXPORT', label: 'Export', description: 'Export family data' },
           ],
         },
         {
@@ -159,7 +158,6 @@ export const featureCatalogue: FeatureCatalogue = {
             { key: 'ADMIN.PROGRAMMES.CREATE', label: 'Create', description: 'Create programmes' },
             { key: 'ADMIN.PROGRAMMES.EDIT', label: 'Edit', description: 'Edit programmes' },
             { key: 'ADMIN.PROGRAMMES.ARCHIVE', label: 'Archive', description: 'Archive programmes' },
-            { key: 'ADMIN.PROGRAMMES.EXPORT', label: 'Export', description: 'Export programme data' },
           ],
         },
         {
@@ -232,56 +230,111 @@ export const featureCatalogue: FeatureCatalogue = {
             { key: 'ADMIN.ROLES.MANAGE_PERMISSIONS', label: 'Manage Permissions', description: 'Assign permissions to roles' },
           ],
         },
-        {
-          id: 'admin.archived',
-          label: 'Archived',
-          icon: 'archive',
-          permissions: [
-            { key: 'ADMIN.ARCHIVED.VIEW', label: 'View', description: 'View archived records' },
-            { key: 'ADMIN.ARCHIVED.RESTORE', label: 'Restore', description: 'Restore archived records' },
-            { key: 'ADMIN.ARCHIVED.DELETE', label: 'Delete Permanently', description: 'Permanently delete records' },
-          ],
-        },
+
         {
           id: 'admin.auditlogs',
           label: 'Audit Logs',
           icon: 'history',
           permissions: [
             { key: 'ADMIN.AUDITLOGS.VIEW', label: 'View', description: 'View audit logs' },
-            { key: 'ADMIN.AUDITLOGS.EXPORT', label: 'Export', description: 'Export audit logs' },
           ],
         },
       ],
     },
     // ════════════════════════════════════════════════════════════════
-    // SYSTEM FEATURES
+    // SYSTEM PERMISSIONS
+    // Cross-cutting capabilities that span all modules.
     // ════════════════════════════════════════════════════════════════
     {
       id: 'system',
       label: 'System',
       icon: 'settings',
-      description: 'System-wide settings and configurations',
+      description: 'Cross-cutting system capabilities',
+      permissions: [
+        { key: 'SYSTEM.EXPORT', label: 'Export Data', description: 'Export any data from the system as CSV/Excel' },
+      ],
+      children: [],
+    },
+    // ════════════════════════════════════════════════════════════════
+    // PROGRAMME MANAGEMENT FEATURES
+    // Granular permissions for the Programme Admin section.
+    // These are separate from ADMIN.PROGRAMMES.* (which serve as the
+    // gateway) and provide fine-grained control within the section.
+    // ════════════════════════════════════════════════════════════════
+    {
+      id: 'programme',
+      label: 'Programme Management',
+      icon: 'verified_user',
+      description: 'Programme administration features',
       permissions: [],
       children: [
         {
-          id: 'system.export',
-          label: 'Data Export',
-          icon: 'download',
+          id: 'programme.programmes',
+          label: 'Programmes',
+          icon: 'verified_user',
           permissions: [
-            { key: 'SYSTEM.EXPORT.ALL', label: 'Export All Data', description: 'Export all system data' },
+            { key: 'PROGRAMME.PROGRAMMES.VIEW',    label: 'View',    description: 'View programme list and details' },
+            { key: 'PROGRAMME.PROGRAMMES.CREATE',  label: 'Create',  description: 'Create new programmes' },
+            { key: 'PROGRAMME.PROGRAMMES.EDIT',    label: 'Edit',    description: 'Edit programme settings' },
+            { key: 'PROGRAMME.PROGRAMMES.DELETE',  label: 'Delete',  description: 'Delete or archive programmes' },
+            { key: 'PROGRAMME.PROGRAMMES.PUBLISH', label: 'Publish', description: 'Activate and publish draft programmes' },
           ],
         },
         {
-          id: 'system.reports',
-          label: 'Reports',
-          icon: 'analytics',
+          id: 'programme.beneficiaries',
+          label: 'Beneficiaries',
+          icon: 'group_add',
           permissions: [
-            { key: 'SYSTEM.REPORTS.VIEW', label: 'View', description: 'View reports' },
-            { key: 'SYSTEM.REPORTS.CREATE', label: 'Create', description: 'Create reports' },
+            { key: 'PROGRAMME.BENEFICIARIES.VIEW',   label: 'View',   description: 'View programme beneficiaries and enrolments' },
+            { key: 'PROGRAMME.BENEFICIARIES.ENROLL', label: 'Enroll', description: 'Enroll families into programmes' },
+            { key: 'PROGRAMME.BENEFICIARIES.MANAGE', label: 'Manage', description: 'Approve, suspend, or exit beneficiaries' },
+          ],
+        },
+        {
+          id: 'programme.rules',
+          label: 'Rules & Variables',
+          icon: 'rule',
+          permissions: [
+            { key: 'PROGRAMME.RULES.VIEW',   label: 'View',   description: 'View rule groups, rules, and variables' },
+            { key: 'PROGRAMME.RULES.MANAGE', label: 'Manage', description: 'Create, edit, and delete eligibility rules' },
+          ],
+        },
+        {
+          id: 'programme.reports',
+          label: 'Reports',
+          icon: 'bar_chart',
+          permissions: [
+            { key: 'PROGRAMME.REPORTS.VIEW', label: 'View', description: 'View programme reports and payment analytics' },
+          ],
+        },
+        {
+          id: 'programme.managers',
+          label: 'Programme Managers',
+          icon: 'manage_accounts',
+          permissions: [
+            { key: 'PROGRAMME.MANAGERS.VIEW',   label: 'View',   description: 'View users assigned as programme managers' },
+            { key: 'PROGRAMME.MANAGERS.MANAGE', label: 'Manage', description: 'Assign or remove programme managers' },
+          ],
+        },
+        {
+          id: 'programme.engine',
+          label: 'Eligibility Engine',
+          icon: 'psychology',
+          permissions: [
+            { key: 'PROGRAMME.ENGINE.RUN', label: 'Run', description: 'Run the eligibility evaluation engine' },
+          ],
+        },
+        {
+          id: 'programme.auditlogs',
+          label: 'Audit Logs',
+          icon: 'history',
+          permissions: [
+            { key: 'PROGRAMME.AUDITLOGS.VIEW', label: 'View', description: 'View programme change and exit audit logs' },
           ],
         },
       ],
     },
+
   ],
 }
 

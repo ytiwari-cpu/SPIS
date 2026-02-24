@@ -3,7 +3,7 @@
  */
 import { Router, Response } from 'express'
 import { supabase } from '../lib/supabase.js'
-import { AuthenticatedRequest, requireRole } from '../middleware/requireAuth.js'
+import { AuthenticatedRequest, requirePermission } from '../middleware/requireAuth.js'
 import { evaluateSubject, evaluateAllSubjects } from '../services/ruleEngine.js'
 
 export const engineRouter = Router()
@@ -38,10 +38,10 @@ engineRouter.post(
     },
 )
 
-// POST /api/v1/engine/evaluate-all/:programmeId — Batch evaluate all families (SuperAdmin)
+// POST /api/v1/engine/evaluate-all/:programmeId — Batch evaluate all families
 engineRouter.post(
     '/evaluate-all/:programmeId',
-    requireRole('SuperAdmin', 'ProgrammeManager'),
+    requirePermission('PROGRAMME.ENGINE.RUN', 'ADMIN.PROGRAMMES.EDIT'),
     async (req: AuthenticatedRequest, res: Response) => {
         try {
             const results = await evaluateAllSubjects(req.params.programmeId)

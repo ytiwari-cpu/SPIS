@@ -5,8 +5,8 @@ export default function NotFoundPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const [countdown, setCountdown] = useState(3)
-  const timerRef = useRef<NodeJS.Timeout>()
-  const redirectRef = useRef<NodeJS.Timeout>()
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const redirectRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
     // Countdown timer

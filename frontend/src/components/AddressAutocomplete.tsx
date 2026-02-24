@@ -168,7 +168,7 @@ export default function AddressAutocomplete({
   }
 
   // Debounce input changes
-  const debounceRef = useRef<NodeJS.Timeout>()
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value

@@ -15,8 +15,12 @@ export interface NavItem {
   path: string
   label: string
   icon: string
-  /** The permission key required to access this page (from featureCatalogue). */
-  requiredPermission?: string
+  /**
+   * Permission key(s) required to access this page.
+   *   string   → single permission check
+   *   string[] → OR semantics (any one grants access)
+   */
+  requiredPermission?: string | string[]
   /** Section divider label rendered above this item. */
   section?: string
 }
@@ -40,24 +44,26 @@ export const navConfig: NavItem[] = [
   { path: '/grievances', label: 'Grievances', icon: 'error_outline', requiredPermission: 'CITIZEN.GRIEVANCES.VIEW' },
 
   // ── Administration ───────────────────────────────────────────────────
-  { path: '/admin/overview', label: 'Overview', icon: 'analytics', requiredPermission: 'ADMIN.OVERVIEW.VIEW', section: 'Administration' },
-  { path: '/admin/families', label: 'Families', icon: 'family_restroom', requiredPermission: 'ADMIN.FAMILIES.VIEW' },
+  { path: '/admin/families', label: 'Families', icon: 'family_restroom', requiredPermission: 'ADMIN.FAMILIES.VIEW', section: 'Administration' },
+  { path: '/admin/programmes', label: 'Programmes', icon: 'verified_user', requiredPermission: 'ADMIN.PROGRAMMES.VIEW' },
   { path: '/admin/grievances', label: 'Grievances', icon: 'error_outline', requiredPermission: 'ADMIN.GRIEVANCES.VIEW' },
   { path: '/admin/appeals', label: 'Appeals', icon: 'gavel', requiredPermission: 'ADMIN.APPEALS.VIEW' },
   { path: '/admin/users', label: 'Users', icon: 'group', requiredPermission: 'ADMIN.USERS.VIEW' },
   { path: '/admin/case-workers', label: 'Case Workers', icon: 'support_agent', requiredPermission: 'ADMIN.CASEWORKERS.VIEW' },
   { path: '/admin/admin-access', label: 'Admins & Access', icon: 'admin_panel_settings', requiredPermission: 'ADMIN.ACCESS.VIEW' },
-  { path: '/admin/roles', label: 'Role Management', icon: 'lock_person', requiredPermission: 'ADMIN.ROLES.VIEW' },
-  { path: '/admin/archived', label: 'Archived', icon: 'archive', requiredPermission: 'ADMIN.ARCHIVED.VIEW' },
   { path: '/admin/audit-logs', label: 'Audit Logs', icon: 'history', requiredPermission: 'ADMIN.AUDITLOGS.VIEW' },
 
   // ── Programme Admin ─────────────────────────────────────────────────
-  { path: '/programme-admin/programmes', label: 'Programmes', icon: 'verified_user', requiredPermission: 'ADMIN.PROGRAMMES.VIEW' },
-  { path: '/programme-admin/beneficiaries', label: 'Beneficiaries', icon: 'group_add', requiredPermission: 'ADMIN.PROGRAMMES.VIEW' },
-  { path: '/programme-admin/payments', label: 'Payments', icon: 'credit_card', requiredPermission: 'ADMIN.PROGRAMMES.VIEW' },
-  { path: '/programme-admin/reports', label: 'Reports', icon: 'bar_chart', requiredPermission: 'ADMIN.PROGRAMMES.VIEW' },
-  { path: '/programme-admin/audit-logs', label: 'Audit Logs', icon: 'history', requiredPermission: 'ADMIN.PROGRAMMES.VIEW' },
-  { path: '/programme-admin/managers', label: 'Programme Settings', icon: 'settings', requiredPermission: 'ADMIN.PROGRAMMES.VIEW' },
+  // Each item accepts EITHER ADMIN.PROGRAMMES.VIEW (full admin)
+  // OR the specific PROGRAMME.* key (ProgrammeManager role).
+  { path: '/programme-admin/programmes',    label: 'Programmes',         icon: 'verified_user',    requiredPermission: ['ADMIN.PROGRAMMES.VIEW', 'PROGRAMME.PROGRAMMES.VIEW'],   section: 'Programme Admin' },
+  { path: '/programme-admin/beneficiaries', label: 'Beneficiaries',      icon: 'group_add',        requiredPermission: ['ADMIN.PROGRAMMES.VIEW', 'PROGRAMME.BENEFICIARIES.VIEW'] },
+  { path: '/programme-admin/payments',      label: 'Payments',           icon: 'credit_card',      requiredPermission: ['ADMIN.PROGRAMMES.VIEW', 'PROGRAMME.REPORTS.VIEW'] },
+  { path: '/programme-admin/reports',       label: 'Reports',            icon: 'bar_chart',        requiredPermission: ['ADMIN.PROGRAMMES.VIEW', 'PROGRAMME.REPORTS.VIEW'] },
+  { path: '/programme-admin/audit-logs',    label: 'Audit Logs',         icon: 'history',          requiredPermission: ['ADMIN.PROGRAMMES.VIEW', 'PROGRAMME.AUDITLOGS.VIEW'] },
+  { path: '/programme-admin/managers',      label: 'Programme Settings', icon: 'settings',         requiredPermission: ['ADMIN.PROGRAMMES.VIEW', 'PROGRAMME.MANAGERS.VIEW'] },
+  { path: '/programme-admin/rule-groups',   label: 'Rule Groups',        icon: 'rule',             requiredPermission: ['ADMIN.PROGRAMMES.VIEW', 'PROGRAMME.RULES.VIEW'] },
+  { path: '/programme-admin/variables',     label: 'Variables',          icon: 'data_object',      requiredPermission: ['ADMIN.PROGRAMMES.VIEW', 'PROGRAMME.RULES.VIEW'] },
 
   // ── Settings ─────────────────────────────────────────────────────────
   { path: '/settings', label: 'Settings', icon: 'settings', section: 'Account' },
