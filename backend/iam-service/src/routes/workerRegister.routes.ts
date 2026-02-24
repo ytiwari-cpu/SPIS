@@ -5,11 +5,15 @@
 
 import { Router } from 'express'
 import type { Request, Response } from 'express'
-import bcrypt from 'bcrypt'
 import { hashNationalId, generateOtp, hashOtp } from '../lib/crypto.js'
 import { sendOtpEmail } from '../lib/emailClient.js'
 import { createUser, getUserByNationalIdHash, addRole, createOtpToken } from '../db/repository.js'
 import { logger } from '../lib/logger.js'
+import {
+  getKeycloakUserByUsername,
+  createKeycloakUser,
+  updateKeycloakPassword,
+} from '../lib/keycloak.js'
 
 const router = Router()
 
@@ -181,7 +185,7 @@ router.post('/worker-register/verify', async (req: Request, res: Response) => {
     }
 
     // 4. Get OTP token
-    const { getActiveOtpToken, markOtpUsed, updateUserPassword, updateUserStatus } = await import('../db/repository.js')
+    const { getActiveOtpToken, markOtpUsed, updateUserStatus } = await import('../db/repository.js')
     const { verifyOtp } = await import('../lib/crypto.js')
 
     const otpToken = await getActiveOtpToken(tempUser.user_id, 'worker_registration')
@@ -207,15 +211,43 @@ router.post('/worker-register/verify', async (req: Request, res: Response) => {
       })
     }
 
-    // 6. Update user with password and active status
-    const passwordHash = await bcrypt.hash(password, 10)
-    await updateUserPassword(tempUser.user_id, passwordHash)
+    // 6. Activate user status (no local password storage)
     await updateUserStatus(tempUser.user_id, 'active')
 
-    // 7. Assign role
+    // 7. Set password in Keycloak ONLY - no local storage
+    try {
+      const keycloakUser = await getKeycloakUserByUsername(national_id)
+      if (keycloakUser) {
+        await updateKeycloakPassword(keycloakUser.id, password)
+        logger.info('Worker password updated in Keycloak', { userId: tempUser.user_id })
+      } else {
+        await createKeycloakUser({
+          username: national_id,
+          email,
+          password,
+          enabled: true,
+        })
+        logger.info('Worker created in Keycloak', { userId: tempUser.user_id })
+      }
+    } catch (keycloakError) {
+      // If Keycloak fails, worker registration fails completely
+      logger.error('Failed to create worker in Keycloak', {
+        userId: tempUser.user_id,
+        error: (keycloakError as Error).message,
+      })
+      return res.status(500).json({
+        success: false,
+        error: {
+          code: 'KEYCLOAK_ERROR',
+          message: 'Worker registration failed. Please try again.'
+        }
+      })
+    }
+
+    // 8. Assign role
     await addRole(tempUser.user_id, role)
 
-    // 8. Mark OTP as used
+    // 9. Mark OTP as used
     await markOtpUsed(otpToken.id)
 
     logger.info('Worker registered successfully', { userId: tempUser.user_id, email, role })

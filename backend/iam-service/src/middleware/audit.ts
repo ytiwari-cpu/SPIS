@@ -38,7 +38,6 @@ const EXCLUDE_PATHS = (process.env.AUDIT_EXCLUDE_PATHS || '/iam/health,/api/heal
  */
 const SENSITIVE_FIELDS = [
   'password',
-  'password_hash',
   'passwordHash',
   'token',
   'access_token',

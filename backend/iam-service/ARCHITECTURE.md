@@ -109,7 +109,6 @@ The **IAM Service** is a standalone microservice that wraps **Keycloak** to prov
 |----------------------|-----------------|----------------------------------|
 | user_id              | UUID (PK)       | Auto-generated                   |
 | email                | VARCHAR(255)    | Login identifier, UNIQUE         |
-| password_hash        | TEXT            | Reference hash (Keycloak is source of truth) |
 | mfa_enabled          | BOOLEAN         | Whether MFA is active            |
 | mfa_secret           | TEXT            | Encrypted TOTP secret            |
 | status               | ENUM            | pending → active → locked → disabled |

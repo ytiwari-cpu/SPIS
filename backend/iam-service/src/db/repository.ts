@@ -18,18 +18,16 @@ import type {
 
 export async function createUser(params: {
   email: string
-  passwordHash?: string
   registryId?: string
   nationalIdHash?: string
   status?: UserStatus
 }): Promise<UserRow> {
   const { rows } = await pool.query<UserRow>(
-    `INSERT INTO users (email, password_hash, registry_id, national_id_hash, status)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO users (email, registry_id, national_id_hash, status)
+     VALUES ($1, $2, $3, $4)
      RETURNING *`,
     [
       params.email,
-      params.passwordHash || '',
       params.registryId || null,
       params.nationalIdHash || null,
       params.status || 'pending',
@@ -74,13 +72,6 @@ export async function updateUserStatus(userId: string, status: UserStatus): Prom
   await pool.query(
     'UPDATE users SET status = $1 WHERE user_id = $2',
     [status, userId]
-  )
-}
-
-export async function updateUserPassword(userId: string, passwordHash: string): Promise<void> {
-  await pool.query(
-    'UPDATE users SET password_hash = $1 WHERE user_id = $2',
-    [passwordHash, userId]
   )
 }
 
@@ -137,7 +128,7 @@ export async function disableUser(userId: string): Promise<void> {
  *   - inlineParams() handles $N substitution by string replacement.
  *   - Arrays aren't natively supported by inlineParams, so for the role
  *     filter we build an explicit IN (...) list instead of using ANY($N).
- *   - Sensitive columns (password_hash, mfa_secret) are excluded.
+ *   - Sensitive columns (mfa_secret) are excluded.
  */
 export async function listUsers(params: {
   page?: number
@@ -188,7 +179,7 @@ export async function listUsers(params: {
   const total = parseInt(countRows[0]?.total || '0', 10)
 
   // ── Main query ───────────────────────────────────────────────────────
-  // Exclude sensitive columns (password_hash, mfa_secret).
+  // Exclude sensitive columns (mfa_secret).
   // IMPORTANT: Cannot use SELECT DISTINCT with json columns — PostgreSQL
   // has no equality operator for json.  When a role join is needed we use
   // GROUP BY instead to deduplicate rows.

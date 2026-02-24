@@ -10,15 +10,15 @@ function normalizeNationalId(value: string): string {
 }
 
 /**
- * Call IAM service to authenticate with national_id + password.
- * Returns JWT token + user info on success.
+ * Call IAM service to authenticate with national_id + password via Keycloak.
+ * Keycloak validates the password; IAM service returns a local HS256 JWT.
  */
 async function authenticateWithIAM(
   nationalId: string,
   password: string,
 ): Promise<{ ok: boolean; data?: Record<string, unknown>; error?: string }> {
   try {
-    const response = await fetch(`${IAM_SERVICE_URL}/iam/login`, {
+    const response = await fetch(`${IAM_SERVICE_URL}/iam/keycloak/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ national_id: nationalId, password }),

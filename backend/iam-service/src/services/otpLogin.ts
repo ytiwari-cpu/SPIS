@@ -1,12 +1,13 @@
 /**
- * SPIS IAM Service — OTP Login Service
+ * SPIS IAM Service — OTP Login Service (with Keycloak integration)
  *
  * Flow for OTP-based login (no password required):
  *   1. User provides national_id → search in users table first
  *   2. If not found in users → search in family_member table (via Registry service)
  *   3. Generate OTP, send via Email Service
  *   4. User submits OTP → verify → generate JWT token
- *   5. If user was found in family_member but not in users → create user in users table
+ *   5. If user was found in family_member but not in users → create user in users table + Keycloak
+ *   6. Create Keycloak user account (for future password-based login) - NO LOCAL PASSWORD STORAGE
  */
 
 import { SignJWT } from 'jose'
@@ -15,6 +16,10 @@ import { logger } from '../lib/logger.js'
 import { generateOtp, hashOtp, verifyOtp, hashNationalId } from '../lib/crypto.js'
 import { sendOtpEmail } from '../lib/emailClient.js'
 import { lookupByNationalId } from '../lib/registryClient.js'
+import { 
+  getKeycloakUserByUsername, 
+  createKeycloakUser,
+} from '../lib/keycloak.js'
 import {
   getUserByNationalIdHash,
   createUser,
@@ -204,12 +209,43 @@ export async function verifyOtpLogin(params: {
     await updateUserStatus(user.user_id, 'active')
   }
 
-  // 8. Get user roles and permissions
+  // 8. Sync user creation with Keycloak (for future password-based login)
+  // This allows users who sign up via OTP to later use password login
+  try {
+    const existingKeycloakUser = await getKeycloakUserByUsername(nationalId)
+    if (!existingKeycloakUser) {
+      // Generate a temporary password for the Keycloak user (they can change it later)
+      const tempPassword = Math.random().toString(36).slice(-12) + 'A1!'
+      
+      await createKeycloakUser({
+        username: nationalId,
+        email: user.email,
+        firstName: '', // Could be updated later from profile
+        lastName: '',
+        password: tempPassword,
+        enabled: true,
+        emailVerified: true, // Since they verified via OTP
+      })
+      
+      logger.info('Created Keycloak user for OTP login user', { 
+        user_id: user.user_id,
+        national_id: nationalId 
+      })
+    }
+  } catch (kcError) {
+    // Keycloak sync is non-critical for OTP login - log but don't fail
+    logger.warn('Failed to sync user with Keycloak (non-critical)', {
+      user_id: user.user_id,
+      error: kcError instanceof Error ? kcError.message : String(kcError),
+    })
+  }
+
+  // 9. Get user roles and permissions
   const roleRows = await getUserRoles(user.user_id)
   const roles = roleRows.map(r => r.role_name)
   const permissions = await getUserPermissions(user.user_id)
 
-  // 9. Generate JWT token with national_id for family service
+  // 10. Generate JWT token with national_id for family service
   const secret = new TextEncoder().encode(config.jwt.secret)
   const token_jwt = await new SignJWT({
     sub: user.user_id,
@@ -226,7 +262,7 @@ export async function verifyOtpLogin(params: {
     .setExpirationTime(`${config.jwt.expiresInSeconds}s`)
     .sign(secret)
 
-  // 10. Record login event
+  // 11. Record login event
   await recordLoginEvent({
     userId: user.user_id,
     ip,

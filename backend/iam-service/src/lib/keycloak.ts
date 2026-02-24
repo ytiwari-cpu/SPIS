@@ -226,6 +226,7 @@ export async function createKeycloakUser(params: {
   lastName?: string
   password: string
   enabled?: boolean
+  emailVerified?: boolean
   attributes?: Record<string, string[]>
 }): Promise<string> {
   const adminToken = await getAdminToken()
@@ -236,7 +237,8 @@ export async function createKeycloakUser(params: {
     firstName: params.firstName || '',
     lastName: params.lastName || '',
     enabled: params.enabled ?? true,
-    emailVerified: true,
+    emailVerified: params.emailVerified ?? true,
+    requiredActions: [],           // ← explicitly empty: no VERIFY_EMAIL / UPDATE_PASSWORD prompts
     attributes: params.attributes || {},
     credentials: [
       {
@@ -357,6 +359,7 @@ export async function assignRoleToUser(userId: string, roleName: string): Promis
 export async function updateKeycloakPassword(userId: string, newPassword: string): Promise<void> {
   const adminToken = await getAdminToken()
 
+  // 1. Set the new password (non-temporary)
   const response = await fetch(`${URLS.usersEndpoint}/${userId}/reset-password`, {
     method: 'PUT',
     headers: {
@@ -373,6 +376,25 @@ export async function updateKeycloakPassword(userId: string, newPassword: string
   if (!response.ok) {
     const errorText = await response.text()
     throw new Error(`Failed to update password: ${response.status} - ${errorText}`)
+  }
+
+  // 2. Clear any pending required actions so login is not blocked
+  //    (e.g. UPDATE_PASSWORD or VERIFY_EMAIL left over from old sync or realm defaults)
+  const clearResponse = await fetch(`${URLS.usersEndpoint}/${userId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${adminToken}`,
+    },
+    body: JSON.stringify({
+      requiredActions: [],
+      emailVerified: true,
+    }),
+  })
+
+  if (!clearResponse.ok) {
+    // Non-fatal: log but don't throw — password is already set
+    logger.warn('Could not clear requiredActions after password update', { userId, status: clearResponse.status })
   }
 
   logger.info('Keycloak user password updated', { userId })

@@ -1,17 +1,25 @@
 /**
- * SPIS IAM Service — Keycloak Login Service
+ * SPIS IAM Service — Keycloak-Only Login Service
  *
- * Authenticates users via Keycloak using Resource Owner Password Grant.
- * 
+ * Authenticates users via Keycloak using Resource Owner Password Grant,
+ * then issues a LOCAL HS256 JWT (same format as OTP login tokens).
+ * NO LOCAL FALLBACK - fully dependent on Keycloak availability.
+ *
  * Flow:
  *   1. User provides national_id + password
  *   2. Lookup user in local IAM DB (for account status checks)
- *   3. Authenticate via Keycloak (password grant)
- *   4. Keycloak returns RS256 signed JWT
- *   5. Extract roles from Keycloak token
- *   6. Return token to frontend
+ *   3. Authenticate via Keycloak password grant (REQUIRED)
+ *   4. On success: generate LOCAL HS256 JWT with user info + permissions
+ *   5. Return local token to frontend (NOT the Keycloak RS256 token)
+ *
+ * WHY LOCAL HS256 TOKENS:
+ *   - Family-service requireAuth middleware already verifies HS256
+ *   - OTP login also issues HS256 tokens — keeps token format consistent
+ *   - JWT payload includes national_id, permissions, roles — all needed by /auth/me
+ *   - No changes needed in family-service or frontend
  */
 
+import { SignJWT } from 'jose'
 import { config } from '../config.js'
 import { logger } from '../lib/logger.js'
 import { hashNationalId } from '../lib/crypto.js'
@@ -21,6 +29,7 @@ import {
 } from '../lib/keycloak.js'
 import {
   getUserByNationalIdHash,
+  getUserRoles,
   getUserPermissions,
   recordLoginEvent,
   incrementFailedLogins,
@@ -30,27 +39,24 @@ import {
 
 export interface KeycloakLoginResult {
   access_token: string
-  refresh_token?: string
   token_type: 'Bearer'
   expires_in: number
   user_id: string
   email: string
   roles: string[]
   permissions: string[]
-  keycloak_sub: string  // Keycloak user ID
   registry_id: string | null
 }
 
 /**
- * Authenticate a user via Keycloak.
- * 
+ * Authenticate a user via Keycloak, then issue a LOCAL HS256 JWT.
+ *
  * The flow:
  * 1. Hash national_id → find user in local IAM DB (for status checks)
- * 2. Send credentials to Keycloak token endpoint
- * 3. Keycloak validates password and returns RS256 signed token
- * 4. Token is signed with Keycloak's PRIVATE KEY
- * 5. Backend can verify token using PUBLIC KEY from JWKS endpoint
- * 6. Return Keycloak token + local permissions to frontend
+ * 2. Send credentials to Keycloak token endpoint (password validation)
+ * 3. Keycloak validates password → returns success
+ * 4. Generate LOCAL HS256 JWT with sub, national_id, roles, permissions
+ * 5. Return local token (same shape as old /iam/login response)
  */
 export async function loginWithKeycloak(params: {
   nationalId: string
@@ -87,53 +93,27 @@ export async function loginWithKeycloak(params: {
     }
   }
 
-  // 3. Authenticate via Keycloak (password grant)
-  // Keycloak will:
-  //   a. Validate username (national_id) and password
-  //   b. Generate JWT payload with user info + roles
-  //   c. Sign JWT with PRIVATE KEY (RS256)
-  //   d. Return access_token + refresh_token
+  if (localUser.status === 'pending') {
+    const err = new Error('Account is not yet activated. Please reset your password first.')
+    ;(err as Error & { statusCode: number }).statusCode = 403
+    throw err
+  }
+
+  // 3. Authenticate via Keycloak ONLY - no local fallback
+  let keycloakSub = ''
+
   try {
     const keycloakTokens = await keycloakAuth(nationalId, password)
 
-    // 4. Verify the token (optional - validates signature with PUBLIC KEY)
-    // This proves the token came from Keycloak and wasn't tampered with
-    const decodedToken = await verifyKeycloakToken(keycloakTokens.access_token)
-
-    // 5. Reset failed login counter on success
-    await resetFailedLogins(localUser.user_id)
-
-    // 6. Get roles from Keycloak token
-    const keycloakRoles = decodedToken.realm_access?.roles || []
-    
-    // 7. Also get local permissions from our DB
-    // (Keycloak manages roles, we manage fine-grained permissions)
-    const localPermissions = await getUserPermissions(localUser.user_id)
-
-    // 8. Record successful login
-    await recordLoginEvent({ userId: localUser.user_id, ip, userAgent, outcome: 'success' })
-
-    logger.info('User logged in via Keycloak', {
-      user_id: localUser.user_id,
-      keycloak_sub: decodedToken.sub,
-      roles: keycloakRoles,
-      permissions_count: localPermissions.length,
-    })
-
-    return {
-      access_token: keycloakTokens.access_token,
-      refresh_token: keycloakTokens.refresh_token,
-      token_type: 'Bearer',
-      expires_in: keycloakTokens.expires_in,
-      user_id: localUser.user_id,
-      email: localUser.email,
-      roles: keycloakRoles,
-      permissions: localPermissions,
-      keycloak_sub: decodedToken.sub,
-      registry_id: localUser.registry_id || null,
+    // Optional: verify the Keycloak token to extract keycloak_sub for logging
+    try {
+      const decoded = await verifyKeycloakToken(keycloakTokens.access_token)
+      keycloakSub = decoded.sub
+    } catch {
+      logger.debug('Could not verify Keycloak token (non-critical)', { user_id: localUser.user_id })
     }
-  } catch (error) {
-    // Keycloak authentication failed
+  } catch (kcError: unknown) {
+    // Keycloak authentication failed - increment failed attempts
     const failCount = await incrementFailedLogins(localUser.user_id)
     await recordLoginEvent({ userId: localUser.user_id, ip, userAgent, outcome: 'fail_password' })
 
@@ -146,32 +126,83 @@ export async function loginWithKeycloak(params: {
       throw err
     }
 
+    // Log the specific error for debugging
+    logger.warn('Keycloak authentication failed', {
+      user_id: localUser.user_id,
+      error: kcError instanceof Error ? kcError.message : String(kcError),
+    })
+
     const err = new Error('Invalid credentials')
     ;(err as Error & { statusCode: number }).statusCode = 401
     throw err
   }
+
+  await resetFailedLogins(localUser.user_id)
+
+  // 5. Get roles and permissions from LOCAL DB
+  const roleRows = await getUserRoles(localUser.user_id)
+  const roles = roleRows.map(r => r.role_name)
+  const permissions = await getUserPermissions(localUser.user_id)
+
+  // 6. Generate LOCAL HS256 JWT (same format as OTP login tokens)
+  const secret = new TextEncoder().encode(config.jwt.secret)
+  const now = Math.floor(Date.now() / 1000)
+
+  const accessToken = await new SignJWT({
+    sub: localUser.user_id,
+    email: localUser.email,
+    national_id: nationalId,
+    roles,
+    permissions,
+    registry_id: localUser.registry_id || undefined,
+  })
+    .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
+    .setIssuedAt(now)
+    .setExpirationTime(now + config.jwt.expiresInSeconds)
+    .setIssuer(config.jwt.issuer)
+    .setAudience(config.jwt.audience)
+    .sign(secret)
+
+  // 7. Record successful login
+  await recordLoginEvent({ userId: localUser.user_id, ip, userAgent, outcome: 'success' })
+
+  logger.info('User logged in via Keycloak (local HS256 token issued)', {
+    user_id: localUser.user_id,
+    keycloak_sub: keycloakSub,
+    roles,
+    permissions_count: permissions.length,
+  })
+
+  return {
+    access_token: accessToken,
+    token_type: 'Bearer',
+    expires_in: config.jwt.expiresInSeconds,
+    user_id: localUser.user_id,
+    email: localUser.email,
+    roles,
+    permissions,
+    registry_id: localUser.registry_id || null,
+  }
 }
 
 /**
- * EXPLANATION: Why we use both Keycloak AND local DB
- * 
+ * EXPLANATION: Why we use Keycloak for password validation but issue local tokens
+ *
  * KEYCLOAK handles:
- * - User credentials (password hashing with bcrypt/argon2)
- * - Token issuance (RS256 signed JWTs)
- * - Role management (realm roles)
- * - Token refresh
- * - Session management
- * 
+ * - Primary password storage and validation
+ * - User credential management
+ *
  * LOCAL IAM DB handles:
  * - Account status (active, locked, disabled)
  * - Failed login tracking & lockout
- * - Fine-grained permissions
+ * - Fine-grained permissions (authz schema)
  * - National ID → User mapping
  * - Audit logging (login events)
- * - Business-specific user attributes
- * 
- * This hybrid approach gives us:
- * - Security of Keycloak's battle-tested auth
- * - Flexibility of custom business logic
- * - RS256 tokens that any service can verify
+ * - JWT issuance (HS256 — same key shared with family-service)
+ *
+ * LOCAL HS256 TOKENS (instead of Keycloak RS256) because:
+ * - Family-service requireAuth middleware already verifies HS256
+ * - OTP login also issues HS256 — consistent token format
+ * - JWT payload includes national_id + permissions — needed by /auth/me
+ * - No changes needed in family-service or frontend
  */

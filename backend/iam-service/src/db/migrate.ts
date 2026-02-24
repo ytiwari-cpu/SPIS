@@ -60,7 +60,6 @@ END $$;
 CREATE TABLE IF NOT EXISTS users (
   user_id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email               VARCHAR(255) NOT NULL UNIQUE,
-  password_hash       TEXT NOT NULL DEFAULT '',
   mfa_enabled         BOOLEAN NOT NULL DEFAULT FALSE,
   mfa_secret          TEXT,                                 -- encrypted TOTP secret
   status              user_status NOT NULL DEFAULT 'pending',
