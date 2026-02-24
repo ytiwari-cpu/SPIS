@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Citizen Dashboard: Family Details</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#0f2cbd",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#101322",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display text-[#0d101b] dark:text-white">
+<div class="relative flex min-h-screen w-full flex-col overflow-x-hidden">
+<!-- TopAppBar -->
+<header class="sticky top-0 z-40 flex items-center bg-white dark:bg-background-dark border-b border-gray-200 dark:border-gray-800 p-4 justify-between">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[#0d101b] dark:text-white cursor-pointer">arrow_back</span>
+<h2 class="text-[#0d101b] dark:text-white text-lg font-bold leading-tight tracking-tight">Family Details</h2>
+</div>
+<div class="flex items-center gap-2">
+<button class="flex items-center justify-center rounded-lg h-10 w-10 bg-transparent text-[#0d101b] dark:text-white">
+<span class="material-symbols-outlined">search</span>
+</button>
+<button class="flex items-center justify-center rounded-lg h-10 w-10 bg-transparent text-[#0d101b] dark:text-white">
+<span class="material-symbols-outlined">menu</span>
+</button>
+</div>
+</header>
+<main class="flex-1 overflow-y-auto">
+<!-- Section 1: Family Summary -->
+<section class="p-4 border-b border-gray-200 dark:border-gray-800">
+<h2 class="text-[#0d101b] dark:text-white text-xl font-bold leading-tight tracking-tight mb-4">Family Summary</h2>
+<div class="bg-white dark:bg-[#1a1d2d] rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-800">
+<div class="flex justify-between items-center py-2 border-b border-gray-50 dark:border-gray-800">
+<p class="text-gray-500 dark:text-gray-400 text-sm font-medium">Family ID</p>
+<p class="text-[#0d101b] dark:text-white text-sm font-bold">FAM-98234</p>
+</div>
+<div class="flex justify-between items-center py-2 border-b border-gray-50 dark:border-gray-800">
+<p class="text-gray-500 dark:text-gray-400 text-sm font-medium">Family Size</p>
+<p class="text-[#0d101b] dark:text-white text-sm font-bold">5 Members</p>
+</div>
+<div class="flex justify-between items-center py-2">
+<p class="text-gray-500 dark:text-gray-400 text-sm font-medium">Vulnerability Status</p>
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+                            Active - Priority Support
+                        </span>
+</div>
+</div>
+</section>
+<!-- Section 2: Family Members (Table adapted for Mobile Cards) -->
+<section class="p-4">
+<div class="flex justify-between items-center mb-4">
+<h2 class="text-[#0d101b] dark:text-white text-xl font-bold leading-tight tracking-tight">Family Members</h2>
+<span class="text-primary text-sm font-semibold">View All</span>
+</div>
+<div class="space-y-3">
+<!-- Member Card 1 -->
+<div class="bg-white dark:bg-[#1a1d2d] rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-800">
+<div class="flex justify-between items-start mb-2">
+<div>
+<h3 class="font-bold text-[#0d101b] dark:text-white text-base">Johnathan Doe</h3>
+<p class="text-xs text-gray-500 dark:text-gray-400">Head of Household</p>
+</div>
+<span class="material-symbols-outlined text-green-500 text-sm">check_circle</span>
+</div>
+<div class="grid grid-cols-3 gap-2 mt-3 text-xs">
+<div class="flex flex-col">
+<span class="text-gray-400">Age/Sex</span>
+<span class="dark:text-white">42 / Male</span>
+</div>
+<div class="flex flex-col">
+<span class="text-gray-400">Status</span>
+<span class="text-green-600 font-medium">Alive</span>
+</div>
+<div class="flex flex-col">
+<span class="text-gray-400">Relationship</span>
+<span class="dark:text-white">Self</span>
+</div>
+</div>
+</div>
+<!-- Member Card 2 -->
+<div class="bg-white dark:bg-[#1a1d2d] rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-800">
+<div class="flex justify-between items-start mb-2">
+<div>
+<h3 class="font-bold text-[#0d101b] dark:text-white text-base">Maria Doe</h3>
+<p class="text-xs text-gray-500 dark:text-gray-400">Member</p>
+</div>
+<span class="material-symbols-outlined text-green-500 text-sm">check_circle</span>
+</div>
+<div class="grid grid-cols-3 gap-2 mt-3 text-xs">
+<div class="flex flex-col">
+<span class="text-gray-400">Age/Sex</span>
+<span class="dark:text-white">38 / Female</span>
+</div>
+<div class="flex flex-col">
+<span class="text-gray-400">Status</span>
+<span class="text-green-600 font-medium">Alive</span>
+</div>
+<div class="flex flex-col">
+<span class="text-gray-400">Relationship</span>
+<span class="dark:text-white">Spouse</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 3: Programme Enrollment -->
+<section class="p-4 bg-gray-50 dark:bg-background-dark/50">
+<h2 class="text-[#0d101b] dark:text-white text-xl font-bold leading-tight tracking-tight mb-4">Programme Enrollment</h2>
+<div class="space-y-4">
+<!-- Enrollment Item 1 -->
+<div class="bg-white dark:bg-[#1a1d2d] rounded-xl overflow-hidden border border-gray-100 dark:border-gray-800 shadow-sm">
+<div class="bg-primary/5 p-3 border-b border-primary/10 flex justify-between items-center">
+<span class="font-bold text-primary text-sm">Food Security Subsidy</span>
+<span class="px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Active</span>
+</div>
+<div class="p-4">
+<div class="flex items-center gap-3 mb-4">
+<div class="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">restaurant</span>
+</div>
+<div>
+<p class="text-xs text-gray-500 dark:text-gray-400">Enrolled Members</p>
+<p class="text-sm font-semibold dark:text-white">All (5 Members)</p>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4 text-xs border-t border-gray-50 dark:border-gray-800 pt-3">
+<div>
+<p class="text-gray-400 mb-1">Effective From</p>
+<p class="font-medium dark:text-white">Jan 01, 2023</p>
+</div>
+<div>
+<p class="text-gray-400 mb-1">Effective To</p>
+<p class="font-medium dark:text-white">Dec 31, 2024</p>
+</div>
+</div>
+<button class="mt-4 w-full py-2 bg-gray-50 dark:bg-gray-800 text-primary text-xs font-bold rounded-lg flex items-center justify-center gap-1">
+                                View Enrollment Details
+                                <span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Enrollment Item 2 -->
+<div class="bg-white dark:bg-[#1a1d2d] rounded-xl overflow-hidden border border-gray-100 dark:border-gray-800 shadow-sm">
+<div class="bg-orange-50 dark:bg-orange-900/10 p-3 border-b border-orange-100 dark:border-orange-900/20 flex justify-between items-center">
+<span class="font-bold text-orange-700 dark:text-orange-400 text-sm">Education Grant</span>
+<span class="px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-bold bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">Pending Review</span>
+</div>
+<div class="p-4">
+<div class="flex items-center gap-3 mb-4">
+<div class="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+<span class="material-symbols-outlined text-orange-600">school</span>
+</div>
+<div>
+<p class="text-xs text-gray-500 dark:text-gray-400">Enrolled Members</p>
+<p class="text-sm font-semibold dark:text-white">Sarah Doe, James Doe</p>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4 text-xs border-t border-gray-50 dark:border-gray-800 pt-3">
+<div>
+<p class="text-gray-400 mb-1">Effective From</p>
+<p class="font-medium dark:text-white">TBD</p>
+</div>
+<div>
+<p class="text-gray-400 mb-1">Effective To</p>
+<p class="font-medium dark:text-white">TBD</p>
+</div>
+</div>
+<button class="mt-4 w-full py-2 bg-gray-50 dark:bg-gray-800 text-primary text-xs font-bold rounded-lg flex items-center justify-center gap-1">
+                                View Enrollment Details
+                                <span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<div class="p-6">
+<button class="w-full bg-primary text-white font-bold py-4 rounded-xl shadow-lg shadow-primary/20 flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">edit</span>
+                    Update Family Information
+                </button>
+</div>
+</main>
+<!-- Bottom Navigation (iOS Style) -->
+<nav class="sticky bottom-0 bg-white/80 dark:bg-background-dark/80 backdrop-blur-md border-t border-gray-200 dark:border-gray-800 flex justify-around p-3 pb-6">
+<div class="flex flex-col items-center gap-1 text-gray-400">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="text-[10px] font-medium">Home</span>
+</div>
+<div class="flex flex-col items-center gap-1 text-primary">
+<span class="material-symbols-outlined">groups</span>
+<span class="text-[10px] font-bold">Profile</span>
+</div>
+<div class="flex flex-col items-center gap-1 text-gray-400">
+<span class="material-symbols-outlined">description</span>
+<span class="text-[10px] font-medium">Benefits</span>
+</div>
+<div class="flex flex-col items-center gap-1 text-gray-400">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-[10px] font-medium">Settings</span>
+</div>
+</nav>
+</div>
+</body></html>

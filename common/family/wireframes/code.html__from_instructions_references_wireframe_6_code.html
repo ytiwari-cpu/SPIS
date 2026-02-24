@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Citizen Dashboard: My Account</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#0f2cbd",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#101322",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100">
+<!-- Main Container -->
+<div class="relative flex h-auto min-h-screen w-full flex-col overflow-x-hidden">
+<!-- TopAppBar -->
+<div class="sticky top-0 z-40 flex items-center bg-white dark:bg-slate-900 p-4 border-b border-slate-200 dark:border-slate-800 justify-between">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-slate-600 dark:text-slate-400">menu</span>
+<h2 class="text-lg font-bold leading-tight tracking-tight">My Account</h2>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-slate-600 dark:text-slate-400">notifications</span>
+<div class="size-8 rounded-full bg-primary/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-[20px]">person</span>
+</div>
+</div>
+</div>
+<!-- Main Content Area -->
+<div class="flex-1 p-4 pb-20">
+<!-- Section 1: Profile Information Card -->
+<div class="bg-white dark:bg-slate-900 rounded-xl p-5 shadow-sm border border-slate-200 dark:border-slate-800 mb-6">
+<div class="flex items-center gap-4 mb-6">
+<div class="size-16 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center overflow-hidden border border-slate-300 dark:border-slate-700">
+<span class="material-symbols-outlined text-slate-400 text-4xl">account_circle</span>
+</div>
+<div>
+<h3 class="text-xl font-bold">Johnathan Smith</h3>
+<p class="text-slate-500 dark:text-slate-400 text-sm">Citizen Applicant</p>
+</div>
+</div>
+<div class="space-y-4">
+<div class="flex flex-col border-b border-slate-100 dark:border-slate-800 pb-3">
+<p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Full Name</p>
+<p class="text-base font-medium">Johnathan Alexander Smith</p>
+</div>
+<div class="flex flex-col border-b border-slate-100 dark:border-slate-800 pb-3">
+<p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Email Address</p>
+<p class="text-base font-medium">j.smith@citizen.gov.us</p>
+</div>
+<div class="flex flex-col border-b border-slate-100 dark:border-slate-800 pb-3">
+<p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Phone Number</p>
+<p class="text-base font-medium">+1 (555) 012-3456</p>
+</div>
+<div class="flex flex-col border-b border-slate-100 dark:border-slate-800 pb-3">
+<p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">National ID</p>
+<p class="text-base font-medium">****-****-8842</p>
+</div>
+<div class="flex flex-col pb-1">
+<p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Residential Address</p>
+<p class="text-base font-medium leading-relaxed">742 Evergreen Terrace, Springfield, IL 62704, United States</p>
+</div>
+</div>
+<!-- Actions -->
+<div class="mt-8 flex flex-col gap-3">
+<button class="w-full bg-primary text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[20px]">edit</span>
+                        Edit Profile
+                    </button>
+<button class="w-full bg-primary/10 text-primary font-bold py-3 rounded-lg flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[20px]">lock_reset</span>
+                        Change Password
+                    </button>
+</div>
+</div>
+<!-- Section 2: Login History -->
+<div class="bg-white dark:bg-slate-900 rounded-xl overflow-hidden shadow-sm border border-slate-200 dark:border-slate-800">
+<div class="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+<h3 class="font-bold text-base">Login History</h3>
+<span class="material-symbols-outlined text-slate-400 text-[18px]">history</span>
+</div>
+<div class="divide-y divide-slate-50 dark:divide-slate-800">
+<div class="p-4 flex justify-between items-center">
+<div class="flex flex-col">
+<span class="text-sm font-semibold">Chrome (macOS)</span>
+<span class="text-xs text-slate-500">Today, 10:45 AM • Springfield, US</span>
+</div>
+<span class="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-[10px] font-bold rounded uppercase">Current</span>
+</div>
+<div class="p-4 flex justify-between items-center">
+<div class="flex flex-col">
+<span class="text-sm font-semibold">Safari (iPhone)</span>
+<span class="text-xs text-slate-500">Oct 24, 2023 • 08:21 PM • Chicago, US</span>
+</div>
+</div>
+<div class="p-4 flex justify-between items-center">
+<div class="flex flex-col">
+<span class="text-sm font-semibold">Edge (Windows)</span>
+<span class="text-xs text-slate-500">Oct 22, 2023 • 09:12 AM • Springfield, US</span>
+</div>
+</div>
+</div>
+<button class="w-full p-4 text-center text-primary text-sm font-bold border-t border-slate-100 dark:border-slate-800">
+                    See All Activity
+                </button>
+</div>
+</div>
+<!-- Mobile Bottom Navigation (iPhone style) -->
+<div class="fixed bottom-0 w-full bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-6 py-2 flex justify-between items-center pb-8">
+<div class="flex flex-col items-center gap-1 text-slate-400">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="text-[10px] font-bold">Home</span>
+</div>
+<div class="flex flex-col items-center gap-1 text-slate-400">
+<span class="material-symbols-outlined">description</span>
+<span class="text-[10px] font-bold">Apps</span>
+</div>
+<div class="flex flex-col items-center gap-1 text-primary">
+<span class="material-symbols-outlined">person</span>
+<span class="text-[10px] font-bold">Account</span>
+</div>
+<div class="flex flex-col items-center gap-1 text-slate-400">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-[10px] font-bold">Settings</span>
+</div>
+</div>
+</div>
+</body></html>

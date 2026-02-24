@@ -40,19 +40,21 @@ export async function lookupByNationalId(nationalId: string): Promise<RegistryLo
     })
 
     const body = (res.data?.data || res.data) as Partial<RegistryLookupResult> | undefined
-    if (body?.registry_id) {
-      logger.info('Registry lookup success', { registry_id: body.registry_id })
+    // Accept registry_id OR the refactored family-service fields (uuid / member_id)
+    const registryId = body?.registry_id || body?.member_uuid || (body as Record<string, unknown>)?.['uuid'] as string | undefined
+    if (registryId) {
+      logger.info('Registry lookup success', { registry_id: registryId })
       return {
-        registry_id: body.registry_id,
-        email: body.email || null,
-        phone: body.phone || null,
-        family_uuid: body.family_uuid || null,
-        family_id: body.family_id || null,
-        member_uuid: body.member_uuid || null,
-        member_id: body.member_id || null,
-        national_id: body.national_id || null,
-        first_name: body.first_name,
-        last_name: body.last_name,
+        registry_id: registryId,
+        email: body?.email || null,
+        phone: body?.phone || null,
+        family_uuid: body?.family_uuid || null,
+        family_id: body?.family_id || null,
+        member_uuid: body?.member_uuid || (body as Record<string, unknown>)?.['uuid'] as string | undefined || null,
+        member_id: body?.member_id || null,
+        national_id: body?.national_id || null,
+        first_name: body?.first_name,
+        last_name: body?.last_name,
       }
     }
 
