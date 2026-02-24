@@ -1,17 +1,7 @@
-/**
- * SPIS IAM Service — Login Service
- *
- * Authenticates users against the IAM database (no Keycloak).
- * Flow:
- *   1. User provides national_id + password
- *   2. Hash national_id → find user in IAM DB
- *   3. Verify bcrypt password hash
- *   4. Check user status (active, locked, disabled)
- *   5. Generate JWT with user info + roles
- *   6. Record login event
- */
+// This file has been DEPRECATED and replaced by keycloakLogin.ts
+// The old direct bcrypt authentication is no longer used.
+// All password authentication now goes through Keycloak.
 
-import bcrypt from 'bcrypt'
 import { SignJWT } from 'jose'
 import { config } from '../config.js'
 import { logger } from '../lib/logger.js'
@@ -84,14 +74,10 @@ export async function loginWithCredentials(params: {
     throw err
   }
 
-  // 3. Verify password
-  if (!user.password_hash) {
-    const err = new Error('No password set. Please use "Forgot Password" to create one.')
-    ;(err as Error & { statusCode: number }).statusCode = 401
-    throw err
-  }
-
-  const passwordValid = await bcrypt.compare(password, user.password_hash)
+  // 3. Verify password via Keycloak (this deprecated file used to check bcrypt directly)
+  // Password verification is now handled by keycloakLogin.ts
+  // Keeping this stub so the file still compiles for reference.
+  const passwordValid = false // Always fail — use keycloakLogin.ts instead
   if (!passwordValid) {
     // Increment failed login counter
     const failCount = await incrementFailedLogins(user.user_id)
@@ -118,8 +104,21 @@ export async function loginWithCredentials(params: {
   const roleRows = await getUserRoles(user.user_id)
   const roles = roleRows.map((r) => r.role_name)
 
+  logger.info('User roles fetched', {
+    user_id: user.user_id,
+    email: user.email,
+    roleCount: roleRows.length,
+    roles,
+  })
+
   // 6. Get user permissions
   const permissions = await getUserPermissions(user.user_id)
+
+  logger.info('User permissions fetched', {
+    user_id: user.user_id,
+    permissionCount: permissions.length,
+    firstFive: permissions.slice(0, 5),
+  })
 
   // 7. Generate JWT with national_id for family service
   const secret = new TextEncoder().encode(config.jwt.secret)
@@ -128,10 +127,10 @@ export async function loginWithCredentials(params: {
   const accessToken = await new SignJWT({
     sub: user.user_id,
     email: user.email,
+    national_id: nationalId, // national_id included for family service /auth/me endpoint
     roles,
     permissions,
     registry_id: user.registry_id || undefined,
-    national_id: nationalId, // Add national_id to JWT for family service /auth/me endpoint
   })
     .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
     .setIssuedAt(now)

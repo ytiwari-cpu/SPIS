@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '@/store/authStore'
 import { authApi } from '@/services/familyApi'
 import WorkerRegistrationModal from '@/components/WorkerRegistrationModal'
@@ -22,44 +22,49 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [showWorkerRegistration, setShowWorkerRegistration] = useState(false)
 
+  // Prevent the useEffect redirect from firing during an active login flow
+  const loginInProgress = useRef(false)
+
+  // Already-authenticated users visiting /login are redirected to /dashboard
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !loginInProgress.current) {
       navigate('/dashboard')
     }
   }, [isAuthenticated, navigate])
 
-  const finalizeLogin = async (session: any) => {
-    let patchedSession = { ...session }
+  const finalizeLogin = async (sessionData: any) => {
+    loginInProgress.current = true
+    
+    console.log('[LoginPage] Received session data:', {
+      hasPermissions: !!sessionData.permissions,
+      permissionsIsArray: Array.isArray(sessionData.permissions),
+      permissionsLength: sessionData.permissions?.length || 0,
+      roles: sessionData.roles,
+      keys: Object.keys(sessionData),
+    })
+    
+    login(sessionData)
 
-    // Temporarily persist token to sessionStorage so that the API interceptor
-    // can attach it as an Authorization header when calling getMe()
-    if (patchedSession.access_token) {
-      const tempStorage = {
-        state: { session: { access_token: patchedSession.access_token, family_id: patchedSession.family_id } },
-        version: 0,
+    // Only fetch family details for users with CITIZEN permissions
+    // Staff users (ADMIN.* only) don't have attached families
+    const perms = sessionData.permissions || []
+    const hasCitizenPerms = perms.some((p: string) => p.startsWith('CITIZEN.'))
+
+    if (hasCitizenPerms && sessionData.uuid) {
+      try {
+        const meResponse = await authApi.getMe()
+        if (meResponse.success && meResponse.data) {
+          setFamilyDetails(meResponse.data, meResponse.data.head_member || null)
+        }
+      } catch {
+        // No family record — continue without family details
       }
-      sessionStorage.setItem('spis-auth-storage', JSON.stringify(tempStorage))
     }
 
-    try {
-      const meResponse = await authApi.getMe()
-      if (meResponse.success && meResponse.data) {
-        // Patch session with uuid and family_id from /auth/me
-        patchedSession.uuid = meResponse.data.uuid
-        patchedSession.family_id = meResponse.data.family_id
-        setFamilyDetails(meResponse.data, meResponse.data.head_member || null)
-      }
-    } catch {
-      // No family record (e.g. SuperAdmin/Worker) — continue without family details
-    }
-    login(patchedSession)
-    // Route based on role
-    const roles = patchedSession.roles || []
-    if (roles.includes('SuperAdmin') || roles.includes('Admin')) {
-      navigate('/admin')
-    } else {
-      navigate('/dashboard')
-    }
+    loginInProgress.current = false
+
+    // Always go to /dashboard — SmartDashboard picks the right view
+    navigate('/dashboard')
   }
 
   const handleNationalLogin = async () => {

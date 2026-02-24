@@ -4,7 +4,6 @@
  */
 
 import 'dotenv/config'
-import bcrypt from 'bcrypt'
 import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 
@@ -25,10 +24,8 @@ async function createSuperAdmin() {
     console.log('National ID:', nationalId)
 
     // Generate hashes
-    const passwordHash = await bcrypt.hash(password, 10)
     const nationalIdHash = crypto.createHash('sha256').update(nationalId).digest('hex')
 
-    console.log('✓ Password hash:', passwordHash.substring(0, 20) + '...')
     console.log('✓ National ID hash:', nationalIdHash)
 
     // Check if user exists
@@ -43,11 +40,10 @@ async function createSuperAdmin() {
       userId = existingUsers[0].user_id
       console.log('✓ User exists, updating:', userId)
 
-      // Update password
+      // Update status and national ID
       const { error: updateError } = await supabase
         .from('users')
         .update({
-          password_hash: passwordHash,
           status: 'active',
           national_id_hash: nationalIdHash,
           updated_at: new Date().toISOString()
@@ -55,14 +51,13 @@ async function createSuperAdmin() {
         .eq('user_id', userId)
 
       if (updateError) throw updateError
-      console.log('✓ Updated password and status')
+      console.log('✓ Updated status and national ID')
     } else {
       // Create new user
       const { data: newUser, error: insertError } = await supabase
         .from('users')
         .insert({
           email,
-          password_hash: passwordHash,
           national_id_hash: nationalIdHash,
           status: 'active'
         })

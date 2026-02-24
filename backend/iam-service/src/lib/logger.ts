@@ -14,7 +14,7 @@ const currentLevel = (config.logLevel as LogLevel) || 'info'
 
 const SENSITIVE_KEYS = new Set([
   'otp', 'otp_code', 'otp_hash', 'password', 'new_password',
-  'password_hash', 'token', 'api_key', 'apikey', 'secret',
+  'token', 'api_key', 'apikey', 'secret',
   'mfa_secret', 'authorization', 'cookie', 'national_id',
   'national_id_hash', 'client_secret',
 ])

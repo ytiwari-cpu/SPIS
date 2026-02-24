@@ -4,7 +4,6 @@
  */
 
 import 'dotenv/config'
-import bcrypt from 'bcrypt'
 import { pool } from '../db/pool.js'
 import { hashNationalId } from '../lib/crypto.js'
 import { addRole } from '../db/repository.js'
@@ -19,10 +18,6 @@ async function createSuperAdmin() {
     console.log('Creating Super Admin user...')
     console.log(`Email: ${email}`)
     console.log(`National ID: ${nationalId}`)
-
-    // Hash password
-    const passwordHash = await bcrypt.hash(password, 10)
-    console.log('✓ Password hashed')
 
     // Hash national ID
     const nationalIdHash = hashNationalId(nationalId)
@@ -39,13 +34,13 @@ async function createSuperAdmin() {
       console.log('User ID:', existingUser.rows[0].user_id)
       console.log('Email:', existingUser.rows[0].email)
       
-      // Update password and ensure SuperAdmin role
+      // Update status and national ID hash
       const userId = existingUser.rows[0].user_id
       await pool.query(
-        'UPDATE users SET password_hash = $1, status = $2, national_id_hash = $3 WHERE user_id = $4',
-        [passwordHash, 'active', nationalIdHash, userId]
+        'UPDATE users SET status = $1, national_id_hash = $2 WHERE user_id = $3',
+        ['active', nationalIdHash, userId]
       )
-      console.log('✓ Updated password and set status to active')
+      console.log('✓ Set status to active')
 
       // Ensure SuperAdmin role
       await addRole(userId as string, 'SuperAdmin')
@@ -63,10 +58,10 @@ async function createSuperAdmin() {
 
     // Create new user
     const result = await pool.query(
-      `INSERT INTO users (email, password_hash, national_id_hash, status)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO users (email, national_id_hash, status)
+       VALUES ($1, $2, $3)
        RETURNING user_id, email`,
-      [email, passwordHash, nationalIdHash, 'active']
+      [email, nationalIdHash, 'active']
     )
 
     const userId = result.rows[0].user_id as string

@@ -13,11 +13,15 @@ import { generateOtp, hashOtp, verifyOtp, hashNationalId } from '../lib/crypto.j
 import { sendOtpEmail } from '../lib/emailClient.js'
 import {
   getUserByNationalIdHash, updateUserStatus,
-  updateUserPassword,
   createOtpToken, getActiveOtpToken,
   incrementOtpAttempt, markOtpUsed,
 } from '../db/repository.js'
 import { publishPasswordResetRequested } from '../bus/rabbitmq.js'
+import {
+  getKeycloakUserByUsername,
+  createKeycloakUser,
+  updateKeycloakPassword,
+} from '../lib/keycloak.js'
 
 /**
  * Step 1: Request password reset by national_id.
@@ -153,15 +157,40 @@ export async function confirmPasswordReset(params: {
   // 5. Mark OTP as used
   await markOtpUsed(token.id)
 
-  // 6. Hash password with bcrypt and store in IAM database
-  const bcrypt = await import('bcrypt')
-  const passwordHash = await bcrypt.hash(newPassword, 10)
-  await updateUserPassword(user.user_id, passwordHash)
+  // 6. Set password in Keycloak and save hash to IAM DB for cross-developer sync
+  try {
+    const keycloakUser = await getKeycloakUserByUsername(nationalId)
+
+    if (keycloakUser) {
+      // User exists in Keycloak — update password
+      await updateKeycloakPassword(keycloakUser.id, newPassword)
+      logger.info('Password updated in Keycloak', { user_id: user.user_id })
+    } else {
+      // User not in Keycloak — create with the new password
+      await createKeycloakUser({
+        username: nationalId,
+        email: user.email,
+        password: newPassword,
+        enabled: true,
+      })
+      logger.info('User created in Keycloak with password', { user_id: user.user_id })
+    }
+
+  } catch (keycloakError) {
+    // If Keycloak fails, the password reset fails completely
+    logger.error('Failed to set password in Keycloak', {
+      user_id: user.user_id,
+      error: (keycloakError as Error).message,
+    })
+    const err = new Error('Password reset failed. Please try again.')
+    ;(err as Error & { statusCode: number }).statusCode = 500
+    throw err
+  }
 
   // 7. Activate IAM user
   await updateUserStatus(user.user_id, 'active')
 
-  logger.info('Password reset confirmed (IAM-only mode)', { user_id: user.user_id })
+  logger.info('Password reset confirmed - user created/updated in Keycloak only', { user_id: user.user_id })
 
   return {
     message: 'Password set successfully. You can now log in.',

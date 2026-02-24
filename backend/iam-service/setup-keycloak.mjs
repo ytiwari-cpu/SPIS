@@ -201,6 +201,56 @@ async function createRoles(token) {
   }
 }
 
+async function configureUserProfile(token) {
+  console.log('\n👤 Configuring User Profile (making firstName/lastName optional)...')
+
+  // Fetch current profile schema
+  const getResp = await fetch(`${KEYCLOAK_BASE}/admin/realms/${REALM_NAME}/users/profile`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  })
+  if (!getResp.ok) {
+    console.warn('   ⚠️  Could not fetch user profile schema — skipping')
+    return
+  }
+  const profile = await getResp.json()
+
+  // Remove "required" entirely from firstName and lastName so VERIFY_PROFILE
+  // won't block login for users created without personal names.
+  // NOTE: empty object {} means "required for ALL roles" in Keycloak — must remove the key.
+  // SPIS uses national IDs as identifiers — first/last names are optional.
+  let changed = false
+  for (const attr of profile.attributes ?? []) {
+    if (attr.name === 'firstName' || attr.name === 'lastName') {
+      if ('required' in attr) {
+        delete attr.required    // remove the key entirely (not just empty it)
+        changed = true
+      }
+    }
+  }
+
+  if (!changed) {
+    console.log('   ℹ️  firstName/lastName already optional — skipping update')
+    return
+  }
+
+  const putResp = await fetch(`${KEYCLOAK_BASE}/admin/realms/${REALM_NAME}/users/profile`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(profile),
+  })
+
+  if (!putResp.ok) {
+    const err = await putResp.text()
+    console.warn(`   ⚠️  Could not update user profile schema: ${putResp.status} - ${err}`)
+    return
+  }
+
+  console.log('✅ firstName and lastName are now optional (VERIFY_PROFILE won\'t block ROPC login)')
+}
+
 async function printJWKSInfo(token) {
   console.log('\n🔑 Fetching JWKS (Public Keys)...')
   
@@ -255,21 +305,48 @@ async function main() {
 
   try {
     const token = await getAdminToken()
+    
+    // Quick check: if realm AND client already exist, skip full setup for faster boots
+    const realmCheck = await fetch(`${KEYCLOAK_BASE}/admin/realms/${REALM_NAME}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    if (realmCheck.ok) {
+      // Also verify the client exists (realm might exist but client setup could have failed)
+      const clientCheck = await fetch(`${KEYCLOAK_BASE}/admin/realms/${REALM_NAME}/clients?clientId=${CLIENT_ID}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      const clients = clientCheck.ok ? await clientCheck.json() : []
+      if (clients.length > 0) {
+        console.log(`ℹ️  Realm '${REALM_NAME}' + client '${CLIENT_ID}' already configured — skipping full setup`)
+        await configureUserProfile(token)
+        await printJWKSInfo(token)
+        console.log('╔═══════════════════════════════════════════════════════════╗')
+        console.log('║         SETUP COMPLETE! ✅  (realm already exists)        ║')
+        console.log('╚═══════════════════════════════════════════════════════════╝')
+        return
+      }
+      console.log(`ℹ️  Realm '${REALM_NAME}' exists but client '${CLIENT_ID}' missing — completing setup...`)
+    }
+
     await createRealm(token)
     await createClient(token)
     await createRoles(token)
+    await configureUserProfile(token)
     await printJWKSInfo(token)
 
     console.log('╔═══════════════════════════════════════════════════════════╗')
     console.log('║         SETUP COMPLETE! ✅                                ║')
     console.log('╚═══════════════════════════════════════════════════════════╝')
     console.log('')
-    console.log('Next steps:')
-    console.log('1. Create a test user in Keycloak Admin Console')
-    console.log(`   URL: ${KEYCLOAK_BASE}/admin/master/console/#/${REALM_NAME}/users`)
+    console.log('ℹ️  Shared Keycloak Architecture:')
+    console.log('   All developers share the same Supabase PostgreSQL backend.')
+    console.log('   Users, passwords, roles — everything is instantly shared.')
+    console.log('   No sync scripts needed.')
     console.log('')
-    console.log('2. Or sync users from local IAM DB to Keycloak using:')
-    console.log('   node sync-users-to-keycloak.mjs')
+    console.log('Next steps:')
+    console.log('1. Start the IAM service:  cd backend/iam-service && npm run dev')
+    console.log('2. Manage users in Keycloak Admin Console:')
+    console.log(`   URL: ${KEYCLOAK_BASE}/admin/master/console/#/${REALM_NAME}/users`)
     console.log('')
 
   } catch (error) {

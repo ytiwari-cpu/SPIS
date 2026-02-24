@@ -326,12 +326,12 @@ export type PaginatedApiResponse<T> = PaginatedResponse<T>
 // Post-migration 006: uuid for routing, family_id for display
 // ────────────────────────────────────────────────────────────────────────────
 export interface AuthSession {
-  uuid: string                              // Internal UUID for API routing
-  family_id: string                         // Human-readable ID for display (F123)
-  status: FamilyStatus | null
-  registration_status: RegistrationStatus | null
-  household_size: number | null
-  created_at: string
+  uuid?: string                             // Internal UUID for API routing (absent for users without family)
+  family_id?: string                        // Human-readable ID for display (F123)
+  status?: FamilyStatus | null
+  registration_status?: RegistrationStatus | null
+  household_size?: number | null
+  created_at?: string
   auth_mode: 'production' | 'iam_national_id'
   national_id?: string
   access_token?: string
@@ -341,6 +341,7 @@ export interface AuthSession {
   roles?: string[]
   permissions?: string[]
   user_id?: string
+  email?: string
 }
 
 export interface FamilyWithHead extends DbFamily {

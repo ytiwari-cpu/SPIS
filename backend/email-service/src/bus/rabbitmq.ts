@@ -37,16 +37,39 @@ const ROUTING_KEYS = {
 
 export async function connectBus(): Promise<void> {
   try {
-    connection = await amqplib.connect(config.rabbitmqUrl)
+    // Add connection options for CloudAMQP
+    const connectionOptions = {
+      heartbeat: 30,
+      timeout: 20000,
+    }
+    
+    connection = await amqplib.connect(config.rabbitmqUrl, connectionOptions)
+    
     connection.on('error', (err) => {
       logger.error('RabbitMQ connection error', { error: err.message })
+      connection = null
+      publishChannel = null
     })
+    
     connection.on('close', () => {
-      logger.warn('RabbitMQ connection closed — will reconnect in 5s')
-      setTimeout(() => connectBus().catch(() => {}), 5000)
+      logger.warn('RabbitMQ connection closed — will reconnect in 10s')
+      connection = null
+      publishChannel = null
+      setTimeout(() => connectBus().catch((err) => {
+        logger.error('RabbitMQ reconnection failed', { error: err.message })
+      }), 10000)
     })
 
     publishChannel = await connection.createChannel()
+    
+    publishChannel.on('error', (err) => {
+      logger.error('RabbitMQ channel error', { error: err.message })
+    })
+    
+    publishChannel.on('close', () => {
+      logger.warn('RabbitMQ channel closed')
+      publishChannel = null
+    })
 
     // Declare exchange
     await publishChannel.assertExchange(EXCHANGE, 'topic', { durable: true })
@@ -60,8 +83,12 @@ export async function connectBus(): Promise<void> {
     logger.info('RabbitMQ connected', { exchange: EXCHANGE, queues: Object.values(QUEUES) })
   } catch (err) {
     logger.error('RabbitMQ connection failed', { error: err instanceof Error ? err.message : 'unknown' })
-    // Retry in 5s
-    setTimeout(() => connectBus().catch(() => {}), 5000)
+    connection = null
+    publishChannel = null
+    // Retry in 10s
+    setTimeout(() => connectBus().catch((retryErr) => {
+      logger.error('RabbitMQ connection retry failed', { error: retryErr instanceof Error ? retryErr.message : 'unknown' })
+    }), 10000)
   }
 }
 
@@ -79,18 +106,32 @@ export async function closeBus(): Promise<void> {
 // ═══════════════════════════════════════════════════════════════
 
 export function publish(routingKey: string, payload: Record<string, unknown>): boolean {
-  if (!publishChannel) {
-    logger.error('Cannot publish — no RabbitMQ channel', { routingKey })
+  if (!publishChannel || !connection) {
+    logger.warn('Cannot publish — RabbitMQ not connected', { routingKey })
+    // Attempt to reconnect if not already connecting
+    if (!connection) {
+      connectBus().catch((err) => {
+        logger.error('Auto-reconnect failed', { error: err instanceof Error ? err.message : 'unknown' })
+      })
+    }
     return false
   }
 
-  const buffer = Buffer.from(JSON.stringify(payload))
-  return publishChannel.publish(EXCHANGE, routingKey, buffer, {
-    persistent: true,
-    contentType: 'application/json',
-    messageId: (payload.request_id as string) || undefined,
-    timestamp: Date.now(),
-  })
+  try {
+    const buffer = Buffer.from(JSON.stringify(payload))
+    return publishChannel.publish(EXCHANGE, routingKey, buffer, {
+      persistent: true,
+      contentType: 'application/json',
+      messageId: (payload.request_id as string) || undefined,
+      timestamp: Date.now(),
+    })
+  } catch (err) {
+    logger.error('Failed to publish message', { 
+      routingKey, 
+      error: err instanceof Error ? err.message : 'unknown' 
+    })
+    return false
+  }
 }
 
 /** Convenience: publish to email.send */

@@ -290,5 +290,52 @@ export const grievancesApi = {
     return response.data
   },
 }
+// ────────────────────────────────────────────────────────────────────────────
+// CITIZENS API (family_member listing for admin)
+// ────────────────────────────────────────────────────────────────────────────
 
+export interface Citizen {
+  uuid: string
+  member_id: string
+  family_uuid: string | null
+  national_id: string | null
+  first_name: string
+  last_name: string
+  date_of_birth: string | null
+  gender: string | null
+  relationship_to_head: string | null
+  alive_flag: boolean | null
+  marital_status: string | null
+  phone: string | null
+  email: string | null
+  member_status: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ListCitizensParams {
+  page?: number
+  limit?: number
+  search?: string
+  status?: string
+  gender?: string
+}
+
+export const citizensApi = {
+  list: async (params: ListCitizensParams = {}): Promise<PaginatedResponse<Citizen>> => {
+    const qs = new URLSearchParams()
+    if (params.page) qs.append('page', String(params.page))
+    if (params.limit) qs.append('limit', String(params.limit))
+    if (params.search) qs.append('search', params.search)
+    if (params.status) qs.append('status', params.status)
+    if (params.gender) qs.append('gender', params.gender)
+    const response = await apiClient.get(`/citizens?${qs}`)
+    return response.data
+  },
+
+  getById: async (id: string): Promise<ApiResponse<Citizen>> => {
+    const response = await apiClient.get(`/citizens/${id}`)
+    return response.data
+  },
+}
 export default apiClient

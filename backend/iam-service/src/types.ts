@@ -8,7 +8,9 @@
 
 export type UserStatus = 'pending' | 'active' | 'locked' | 'disabled'
 
-export type RoleName = 'Citizen' | 'CaseWorker' | 'ProgrammeManager' | 'Admin' | 'SuperAdmin' | 'Worker'
+// System roles plus any custom role name (string)
+export type SystemRoleName = 'Citizen' | 'CaseWorker' | 'ProgrammeManager' | 'Admin' | 'SuperAdmin' | 'Worker'
+export type RoleName = string
 
 export type MfaFactorType = 'totp' | 'sms' | 'email'
 
@@ -25,7 +27,6 @@ export type OtpPurpose = 'password_reset' | 'mfa_email' | 'invite' | 'worker_reg
 export interface UserRow {
   user_id: string           // UUID PK
   email: string             // login identifier
-  password_hash: string     // Argon2
   mfa_enabled: boolean
   mfa_secret: string | null // encrypted TOTP secret
   status: UserStatus
@@ -39,7 +40,7 @@ export interface UserRow {
 
 export interface UserRoleRow {
   user_id: string
-  role_name: RoleName
+  role_name: string  // Can be system or custom role
   created_at: string
 }
 

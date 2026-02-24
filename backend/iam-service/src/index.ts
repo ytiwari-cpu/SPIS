@@ -16,7 +16,6 @@ import morgan from 'morgan'
 
 import { config } from './config.js'
 import { passwordResetRouter } from './routes/passwordReset.routes.js'
-import { loginRouter } from './routes/login.routes.js'
 import { keycloakLoginRouter } from './routes/keycloakLogin.routes.js'
 import { otpLoginRouter } from './routes/otpLogin.routes.js'
 import { mfaRouter } from './routes/mfa.routes.js'
@@ -25,6 +24,7 @@ import { adminRouter } from './routes/admin.routes.js'
 import workerRegisterRouter from './routes/workerRegister.routes.js'
 import { healthRouter } from './routes/health.routes.js'
 import { errorHandler, notFound } from './middleware/errorHandler.js'
+import { auditMiddleware } from './middleware/audit.js'
 import { connectBus, closeBus } from './bus/rabbitmq.js'
 import { pool } from './db/pool.js'
 import { closeRedis } from './lib/redis.js'
@@ -43,12 +43,15 @@ app.use(morgan('combined'))
 app.use(express.json({ limit: '1mb' }))
 app.use(express.urlencoded({ extended: true }))
 
+// ── Audit Logging ───────────────────────────────────────────
+// Logs all /iam/* API calls to audit_logs table (except health checks)
+app.use(auditMiddleware())
+
 // ── Routes ──────────────────────────────────────────────────
 app.use('/', healthRouter)                          // /healthz, /readyz
 app.use('/iam/password-reset', passwordResetRouter)  // /iam/password-reset/request, /confirm
-app.use('/iam/login', loginRouter)                   // /iam/login (HS256 - legacy)
 app.use('/iam/otp-login', otpLoginRouter)            // /iam/otp-login/request, /verify
-app.use('/iam/keycloak/login', keycloakLoginRouter)  // /iam/keycloak/login (RS256 - Keycloak)
+app.use('/iam/keycloak/login', keycloakLoginRouter)  // /iam/keycloak/login (Keycloak password validation + local HS256 token)
 app.use('/iam/mfa', mfaRouter)                       // /iam/mfa/totp/*, /iam/mfa/email/*
 app.use('/iam/invite', inviteRouter)                 // /iam/invite
 app.use('/iam/admin', adminRouter)                   // /iam/admin/* (SuperAdmin only)
@@ -73,7 +76,7 @@ async function start() {
       console.log(`   Environment: ${config.nodeEnv}`)
       console.log(`   Keycloak:    ${config.keycloak.baseUrl}/realms/${config.keycloak.realm}`)
       console.log(`   Endpoints:`)
-      console.log(`     POST /iam/login`)
+      console.log(`     POST /iam/keycloak/login`)
       console.log(`     POST /iam/otp-login/request`)
       console.log(`     POST /iam/otp-login/verify`)
       console.log(`     POST /iam/password-reset/request`)

@@ -10,15 +10,15 @@ function normalizeNationalId(value: string): string {
 }
 
 /**
- * Call IAM service to authenticate with national_id + password.
- * Returns JWT token + user info on success.
+ * Call IAM service to authenticate with national_id + password via Keycloak.
+ * Keycloak validates the password; IAM service returns a local HS256 JWT.
  */
 async function authenticateWithIAM(
   nationalId: string,
   password: string,
 ): Promise<{ ok: boolean; data?: Record<string, unknown>; error?: string }> {
   try {
-    const response = await fetch(`${IAM_SERVICE_URL}/iam/login`, {
+    const response = await fetch(`${IAM_SERVICE_URL}/iam/keycloak/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ national_id: nationalId, password }),
@@ -47,6 +47,11 @@ async function authenticateWithIAM(
  * POST /api/v1/auth/login
  *
  * Authenticate with national_id + password via IAM service.
+ * 
+ * DESIGN PRINCIPLE: No role-name checks here. We simply:
+ * 1. Authenticate via IAM (which returns roles + permissions)
+ * 2. Optionally look up family data if user has one
+ * 3. Return everything - let the FRONTEND use PERMISSIONS to decide UI
  */
 router.post('/login', async (req: Request, res: Response) => {
   try {
@@ -69,7 +74,7 @@ router.post('/login', async (req: Request, res: Response) => {
       })
     }
 
-    // 1. Authenticate via IAM service first
+    // 1. Authenticate via IAM service
     const tokenResult = await authenticateWithIAM(cleanNationalId, password)
     if (!tokenResult.ok || !tokenResult.data) {
       return res.status(401).json({
@@ -78,74 +83,62 @@ router.post('/login', async (req: Request, res: Response) => {
       })
     }
 
-    // 2. Check if user is a worker (SuperAdmin, Admin, CaseWorker) - they don't need family
-    const roles = (tokenResult.data.roles as string[]) || []
-    const isWorker = roles.some(role =>
-      role === 'SuperAdmin' || role === 'Admin' || role === 'CaseWorker' || role === 'ProgrammeManager'
-    )
-
-    if (isWorker) {
-      // Workers don't have family records - return just the auth token
-      return res.json({
-        success: true,
-        data: {
-          auth_mode: 'iam_national_id',
-          national_id: cleanNationalId,
-          access_token: tokenResult.data.access_token,
-          user_id: tokenResult.data.user_id,
-          email: tokenResult.data.email,
-          roles: tokenResult.data.roles,
-          is_worker: true,
-        },
-      })
+    // 2. Build base auth response (ALWAYS include all auth data)
+    const baseAuthData = {
+      auth_mode: 'iam_national_id',
+      national_id: cleanNationalId,
+      access_token: tokenResult.data.access_token,
+      token_type: tokenResult.data.token_type,
+      expires_in: tokenResult.data.expires_in,
+      user_id: tokenResult.data.user_id,
+      email: tokenResult.data.email,
+      roles: tokenResult.data.roles || [],
+      permissions: tokenResult.data.permissions || [], // ALWAYS include permissions
     }
 
-    // 3. For Citizens: Look up member in family DB to get family info
-    const { data: member, error: memberError } = await supabase
+    // 3. Try to look up family data (optional - user may or may not have a family)
+    const { data: member } = await supabase
       .from('family_member')
-      .select('*')
+      .select('family_uuid')
       .eq('national_id', cleanNationalId)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
 
-    if (memberError || !member) {
-      return res.status(404).json({
-        success: false,
-        error: 'No family registration found for this user. Please register your family first.',
+    if (!member) {
+      // No family registration - return auth data only
+      return res.json({
+        success: true,
+        data: baseAuthData,
       })
     }
 
-    // 4. Look up family
-    const { data: family, error: familyError } = await supabase
+    // 4. Look up family details
+    const { data: family } = await supabase
       .from('family')
-      .select('*')
+      .select('uuid, family_id, status, registration_status, household_size, created_at')
       .eq('uuid', member.family_uuid)
       .single()
 
-    if (familyError || !family) {
-      return res.status(404).json({
-        success: false,
-        error: 'Family not found for authenticated member',
+    if (!family) {
+      // Member exists but family record missing - return auth data only
+      return res.json({
+        success: true,
+        data: baseAuthData,
       })
     }
+
+    // 5. Return auth data WITH family info
     return res.json({
       success: true,
       data: {
+        ...baseAuthData,
         uuid: family.uuid,
         family_id: family.family_id,
         status: family.status,
         registration_status: family.registration_status,
         household_size: family.household_size,
         created_at: family.created_at,
-        auth_mode: 'iam_national_id',
-        national_id: cleanNationalId,
-        access_token: tokenResult.data.access_token,
-        token_type: tokenResult.data.token_type,
-        expires_in: tokenResult.data.expires_in,
-        roles: tokenResult.data.roles,
-        permissions: tokenResult.data.permissions,
-        user_id: tokenResult.data.user_id,
       },
     })
   } catch (error) {
@@ -237,13 +230,12 @@ router.post('/otp-login/verify', async (req: Request, res: Response) => {
       })
     }
 
-    // 2. Check if user is a worker — they don't need family enrichment
-    const roles = (tokenData.roles as string[]) || []
-    const isWorker = roles.some(role =>
-      role === 'SuperAdmin' || role === 'Admin' || role === 'CaseWorker' || role === 'ProgrammeManager'
-    )
+    // 2. Check if user has admin permissions — staff users don't need family enrichment
+    // NOTE: We check PERMISSIONS, not role names, for scalability
+    const permissions = (tokenData.permissions as string[]) || []
+    const hasAdminPermissions = permissions.some(p => p.startsWith('ADMIN.'))
 
-    if (isWorker) {
+    if (hasAdminPermissions) {
       return res.json({
         success: true,
         data: {
@@ -253,7 +245,8 @@ router.post('/otp-login/verify', async (req: Request, res: Response) => {
           user_id: tokenData.user_id,
           email: tokenData.email,
           roles: tokenData.roles,
-          is_worker: true,
+          permissions: tokenData.permissions, // ALWAYS include permissions
+          is_staff: true,
           is_new_user: tokenData.is_new_user,
         },
       })
@@ -320,21 +313,21 @@ router.post('/otp-login/verify', async (req: Request, res: Response) => {
 
 /**
  * Get current session/family info.
- * For Citizens: returns family info via JWT token (national_id claim) or X-Family-ID header.
- * For Workers: returns user info from JWT without family data.
+ * 
+ * DESIGN PRINCIPLE: No role-name checks. We simply:
+ * 1. Extract user info from JWT
+ * 2. Optionally look up family data if user has one
+ * 3. Return everything - let the FRONTEND use PERMISSIONS to decide UI
  */
 router.get('/me', async (req: Request, res: Response) => {
   try {
-    let familyUuid: string | null = null
     let memberNationalId: string | null = null
     let jwtPayload: Record<string, unknown> | null = null
 
-    // 1. Try JWT token first — extract payload
+    // 1. Extract JWT payload
     const authHeader = req.headers.authorization
     if (authHeader?.startsWith('Bearer ')) {
       try {
-        // Decode JWT payload (already verified by middleware if protected,
-        // but /auth/* is public so we decode manually here)
         const token = authHeader.slice(7)
         const payloadB64 = token.split('.')[1]
         if (payloadB64) {
@@ -356,29 +349,25 @@ router.get('/me', async (req: Request, res: Response) => {
       console.log('[/auth/me] No Authorization header found')
     }
 
-    // 2. Check if user is a worker (SuperAdmin, Admin, CaseWorker, ProgrammeManager)
-    if (jwtPayload) {
-      const roles = (jwtPayload.roles as string[]) || []
-      const isWorker = roles.some(role =>
-        role === 'SuperAdmin' || role === 'Admin' || role === 'CaseWorker' || role === 'ProgrammeManager'
-      )
-
-      if (isWorker) {
-        // Workers don't have family records - return user info from JWT
-        return res.json({
-          success: true,
-          data: {
-            user_id: jwtPayload.sub,
-            email: jwtPayload.email,
-            roles: jwtPayload.roles,
-            permissions: jwtPayload.permissions,
-            is_worker: true,
-          },
-        })
-      }
+    if (!jwtPayload) {
+      return res.status(401).json({
+        success: false,
+        error: 'Not authenticated.',
+      })
     }
 
-    // 3. For Citizens: Look up member by national_id from JWT
+    // 2. Build base user data from JWT (ALWAYS include all auth data)
+    const baseUserData = {
+      user_id: jwtPayload.sub,
+      email: jwtPayload.email,
+      national_id: jwtPayload.national_id || null,
+      roles: jwtPayload.roles || [],
+      permissions: jwtPayload.permissions || [], // ALWAYS include permissions
+    }
+
+    // 3. Try to look up family data (optional - user may or may not have a family)
+    let familyUuid: string | null = null
+
     if (memberNationalId) {
       console.log('[/auth/me] Looking up family_member with national_id:', memberNationalId)
       const { data: member, error: memberError } = await supabase
@@ -400,7 +389,7 @@ router.get('/me', async (req: Request, res: Response) => {
       console.log('[/auth/me] No national_id found in JWT')
     }
 
-    // 4. Fallback: X-Family-ID header (human-readable family_id)
+    // 4. Fallback: X-Family-ID header
     if (!familyUuid) {
       const familyIdHeader = req.headers['x-family-id'] as string
       if (familyIdHeader) {
@@ -415,15 +404,18 @@ router.get('/me', async (req: Request, res: Response) => {
       }
     }
 
+    // 5. No family found - return user data only
     if (!familyUuid) {
-      return res.status(401).json({
-        success: false,
-        error: 'Not authenticated or no family found.',
+      return res.json({
+        success: true,
+        data: {
+          ...baseUserData,
+          no_family: true,
+        },
       })
     }
 
-    // 4. Fetch full family record
-    console.log('[/auth/me] Fetching family with uuid:', familyUuid)
+    // 6. Fetch full family record
     const { data: family, error } = await supabase
       .from('family')
       .select(`
@@ -447,9 +439,12 @@ router.get('/me', async (req: Request, res: Response) => {
     console.log('[/auth/me] Family lookup result:', { family: family ? 'found' : 'not found', error })
 
     if (error || !family) {
-      return res.status(404).json({
-        success: false,
-        error: 'Family not found',
+      return res.json({
+        success: true,
+        data: {
+          ...baseUserData,
+          no_family: true,
+        },
       })
     }
 
@@ -463,6 +458,7 @@ router.get('/me', async (req: Request, res: Response) => {
     return res.json({
       success: true,
       data: {
+        ...baseUserData,
         ...family,
         head_member: headMember || null,
       },

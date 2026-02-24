@@ -10,30 +10,63 @@ if (typeof window !== 'undefined') {
 
 // Layouts
 import PublicLayout from './layouts/PublicLayout'
-import CitizenLayout from './layouts/CitizenLayout'
+import AppLayout from './layouts/AppLayout'
+
+// Guard
+import PermissionGuard from './components/PermissionGuard'
 
 // Public Pages
 import HomePage from './pages/public/HomePage'
 import NoticesPage from './pages/public/NoticesPage'
 import LoginPage from './pages/public/LoginPage'
 import ResetPasswordPage from './pages/public/ResetPasswordPage'
+import NotFoundPage from './pages/NotFoundPage'
 
 // Registration Flow
 import RegistrationWizard from './pages/registration/RegistrationWizard'
 
+// Smart Dashboard (picks admin vs citizen view)
+import SmartDashboard from './pages/SmartDashboard'
+
 // Citizen Pages
-import Dashboard from './pages/citizen/Dashboard'
 import MemberProfile from './pages/citizen/MemberProfile'
 import MyFamily from './pages/citizen/MyFamily'
 import FamilyEdit from './pages/citizen/FamilyEdit'
 import Documents from './pages/citizen/Documents'
 import Benefits from './pages/citizen/Benefits'
-import Programmes from './pages/citizen/Programmes'
-import Grievances from './pages/citizen/Grievances'
 import Settings from './pages/citizen/Settings'
 
+// Common Components (role-based view switchers)
+import ProgrammesView from './components/common/ProgrammesView'
+import GrievancesView from './components/common/GrievancesView'
+
 // Admin Pages
-import { AdminDashboard } from './pages/admin'
+import { AdminUsers } from './pages/admin'
+import {
+  AdminOverview,
+  AdminFamilies,
+  AdminGrievances,
+  AdminAppeals,
+  AdminAdmins,
+  AdminArchived,
+  AdminAuditLogs,
+  AdminRoleManagement,
+  AdminRoles,
+  AdminRoleForm,
+  AdminCaseWorkers,
+  AdminCaseWorkerDetail,
+} from './pages/superadmin'
+
+// Programme Admin Pages
+
+import ProgrammesPage from './pages/programme-admin/ProgrammesPage'
+import RuleGroupsPage from './pages/programme-admin/RuleGroupsPage'
+import VariablesPage from './pages/programme-admin/VariablesPage'
+import BeneficiariesPage from './pages/programme-admin/BeneficiariesPage'
+import ManagersPage from './pages/programme-admin/ManagersPage'
+import PaymentsPage from './pages/programme-admin/PaymentsPage'
+import ReportsPage from './pages/programme-admin/ReportsPage'
+import ProgrammeAuditLogsPage from './pages/programme-admin/AuditLogsPage'
 
 function App() {
   const { isAuthenticated, session, logout } = useAuthStore()
@@ -42,20 +75,19 @@ function App() {
   // and is still accepted by the server (handles server restarts)
   useEffect(() => {
     if (isAuthenticated && session) {
-      // Check if access token exists
       if (!session.access_token) {
         console.warn('No access token found, logging out')
         logout()
         return
       }
 
-      // Decode JWT to check expiration (without verification, just for expiry check)
+      // JWTs use base64url encoding — convert to standard base64 first
       try {
-        const payload = JSON.parse(atob(session.access_token.split('.')[1]))
-        const expiresAt = payload.exp * 1000 // Convert to milliseconds
-        const now = Date.now()
-
-        if (now >= expiresAt) {
+        const b64 = session.access_token.split('.')[1]
+          .replace(/-/g, '+').replace(/_/g, '/')
+        const payload = JSON.parse(atob(b64))
+        const expiresAt = payload.exp * 1000
+        if (Date.now() >= expiresAt) {
           console.warn('Session expired, logging out')
           logout()
           return
@@ -100,7 +132,7 @@ function App() {
 
   return (
     <Routes>
-      {/* Public Routes */}
+      {/* ── Public Routes ─────────────────────────────────────────── */}
       <Route element={<PublicLayout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/notices" element={<NoticesPage />} />
@@ -109,32 +141,61 @@ function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
       </Route>
 
-      {/* Family Registration (can be accessed before/after login) */}
+      {/* Family Registration (before or after login) */}
       <Route path="/register" element={<RegistrationWizard />} />
 
-      {/* Authenticated Citizen Routes */}
+      {/* ── Authenticated Routes — single unified layout ──────────── */}
       <Route
         element={
-          isAuthenticated ? (
-            <CitizenLayout />
-          ) : (
-            <Navigate to="/login" replace />
-          )
+          isAuthenticated ? <AppLayout /> : <Navigate to="/login" replace />
         }
       >
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/profile" element={<MemberProfile />} />
-        <Route path="/family" element={<MyFamily />} />
-        <Route path="/family/edit" element={<FamilyEdit />} />
-        <Route path="/documents" element={<Documents />} />
-        <Route path="/benefits" element={<Benefits />} />
-        <Route path="/programmes" element={<Programmes />} />
-        <Route path="/grievances" element={<Grievances />} />
+        {/* Dashboard — always accessible, picks correct view by role */}
+        <Route path="/dashboard" element={<SmartDashboard />} />
+
+        {/* Citizen pages — guarded by CITIZEN.* permissions */}
+        <Route path="/profile" element={<PermissionGuard permission="CITIZEN.PROFILE.VIEW"><MemberProfile /></PermissionGuard>} />
+        <Route path="/family" element={<PermissionGuard permission="CITIZEN.FAMILY.VIEW"><MyFamily /></PermissionGuard>} />
+        <Route path="/family/edit" element={<PermissionGuard permission="CITIZEN.FAMILY.EDIT"><FamilyEdit /></PermissionGuard>} />
+        <Route path="/documents" element={<PermissionGuard permission="CITIZEN.DOCUMENTS.VIEW"><Documents /></PermissionGuard>} />
+        <Route path="/benefits" element={<PermissionGuard permission="CITIZEN.BENEFITS.VIEW"><Benefits /></PermissionGuard>} />
+        <Route path="/programmes" element={<PermissionGuard permission="CITIZEN.PROGRAMMES.VIEW"><ProgrammesView /></PermissionGuard>} />
+        <Route path="/grievances" element={<GrievancesView />} />
         <Route path="/settings" element={<Settings />} />
-        <Route path="/admin" element={<AdminDashboard />} />
+
+        {/* Admin pages — guarded by ADMIN.* permissions */}
+        <Route path="/admin/overview" element={<PermissionGuard permission="ADMIN.OVERVIEW.VIEW"><AdminOverview /></PermissionGuard>} />
+        <Route path="/admin/families" element={<PermissionGuard permission="ADMIN.FAMILIES.VIEW"><AdminFamilies /></PermissionGuard>} />
+        <Route path="/admin/grievances" element={<PermissionGuard permission="ADMIN.GRIEVANCES.VIEW"><AdminGrievances /></PermissionGuard>} />
+        <Route path="/admin/appeals" element={<PermissionGuard permission="ADMIN.APPEALS.VIEW"><AdminAppeals /></PermissionGuard>} />
+        <Route path="/admin/users" element={<PermissionGuard permission="ADMIN.USERS.VIEW"><AdminUsers /></PermissionGuard>} />
+        <Route path="/admin/admin-access" element={<PermissionGuard permission="ADMIN.ACCESS.VIEW"><AdminAdmins /></PermissionGuard>} />
+        <Route path="/admin/archived" element={<PermissionGuard permission="ADMIN.ARCHIVED.VIEW"><AdminArchived /></PermissionGuard>} />
+        <Route path="/admin/audit-logs" element={<PermissionGuard permission="ADMIN.AUDITLOGS.VIEW"><AdminAuditLogs /></PermissionGuard>} />
+        <Route path="/admin/roles" element={<PermissionGuard permission="ADMIN.ROLES.VIEW"><AdminRoles /></PermissionGuard>} />
+        <Route path="/admin/roles/new" element={<PermissionGuard permission="ADMIN.ROLES.CREATE"><AdminRoleForm /></PermissionGuard>} />
+        <Route path="/admin/roles/:roleName/view" element={<PermissionGuard permission="ADMIN.ROLES.VIEW"><AdminRoleForm /></PermissionGuard>} />
+        <Route path="/admin/roles/:roleName/edit" element={<PermissionGuard permission="ADMIN.ROLES.EDIT"><AdminRoleForm /></PermissionGuard>} />
+        <Route path="/admin/roles-management" element={<PermissionGuard permission="ADMIN.ROLES.MANAGE_PERMISSIONS"><AdminRoleManagement /></PermissionGuard>} />
+        <Route path="/admin/case-workers" element={<PermissionGuard permission="ADMIN.CASEWORKERS.VIEW"><AdminCaseWorkers /></PermissionGuard>} />
+        <Route path="/admin/case-workers/:workerId" element={<PermissionGuard permission="ADMIN.CASEWORKERS.VIEW"><AdminCaseWorkerDetail /></PermissionGuard>} />
+
+        {/* Programme Admin Module */}
+        <Route path="/programme-admin/programmes" element={<PermissionGuard permission="ADMIN.PROGRAMMES.VIEW"><ProgrammesPage /></PermissionGuard>} />
+        <Route path="/programme-admin/programmes/:programmeId" element={<PermissionGuard permission="ADMIN.PROGRAMMES.VIEW"><ProgrammesPage /></PermissionGuard>} />
+        <Route path="/programme-admin/rule-groups" element={<PermissionGuard permission="ADMIN.PROGRAMMES.VIEW"><RuleGroupsPage /></PermissionGuard>} />
+        <Route path="/programme-admin/variables" element={<PermissionGuard permission="ADMIN.PROGRAMMES.VIEW"><VariablesPage /></PermissionGuard>} />
+        <Route path="/programme-admin/beneficiaries" element={<PermissionGuard permission="ADMIN.PROGRAMMES.VIEW"><BeneficiariesPage /></PermissionGuard>} />
+        <Route path="/programme-admin/payments" element={<PermissionGuard permission="ADMIN.PROGRAMMES.VIEW"><PaymentsPage /></PermissionGuard>} />
+        <Route path="/programme-admin/reports" element={<PermissionGuard permission="ADMIN.PROGRAMMES.VIEW"><ReportsPage /></PermissionGuard>} />
+        <Route path="/programme-admin/audit-logs" element={<PermissionGuard permission="ADMIN.PROGRAMMES.VIEW"><ProgrammeAuditLogsPage /></PermissionGuard>} />
+        <Route path="/programme-admin/managers" element={<PermissionGuard permission="ADMIN.PROGRAMMES.VIEW"><ManagersPage /></PermissionGuard>} />
+
+        {/* Catch-all for authenticated users - show 404 with auto-redirect */}
+        <Route path="*" element={<NotFoundPage />} />
       </Route>
 
-      {/* Fallback */}
+      {/* Unauthenticated users on unknown routes go to home */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

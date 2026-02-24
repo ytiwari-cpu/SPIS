@@ -52,8 +52,12 @@ api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401) {
-      // Only redirect if not already on login page (prevent loops)
-      if (!globalThis.location.pathname.includes('/login')) {
+      // Don't force-logout for /auth/me — it's expected to fail for users without family
+      const requestUrl = error.config?.url || ''
+      const isMeEndpoint = requestUrl.includes('/auth/me')
+
+      // Only redirect if not on login page and not an expected /me failure
+      if (!isMeEndpoint && !globalThis.location.pathname.includes('/login')) {
         sessionStorage.removeItem('spis-auth-storage')
         globalThis.location.href = '/login'
       }
