@@ -1,186 +1,148 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- SPIS FAMILY MODULE - FINAL SCHEMA NORMALIZATION
--- Run this ONCE in Supabase SQL Editor
+-- SPIS IAM — RBAC CURRENT SCHEMA REFERENCE
+-- Supabase Project: wrxrstmncezssrscrkxs (IAM DB)
+--
+-- This file documents the CURRENT state of RBAC / permission tables
+-- in the IAM database after all migrations have been applied.
+--
+-- Tables live in the public schema alongside the base IAM tables.
+-- Apply in order: iam-service-schema.sql → this file
 -- ═══════════════════════════════════════════════════════════════════════════
 
--- ═══════════════════════════════════════════════════════════════════════════
--- STEP 1: FAMILY TABLE CHANGES
--- Add head contact fields, drop old FK column
--- ═══════════════════════════════════════════════════════════════════════════
+-- NOTE: roles, permissions, role_permissions, user_permissions, audit_logs,
+-- and import_jobs are now documented as part of iam-service-schema.sql.
+-- This file contains the PERMISSION SEED DATA reflecting the current
+-- system state after migrations 002, 011, 013, and 014.
 
--- Add new columns to family table
-ALTER TABLE family.family 
-  ADD COLUMN IF NOT EXISTS head_first_name VARCHAR(100),
-  ADD COLUMN IF NOT EXISTS head_last_name VARCHAR(100),
-  ADD COLUMN IF NOT EXISTS phone VARCHAR(50),
-  ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+-- ════════════════════════════════════════════════════════════════════════════
+-- ADMIN MODULE PERMISSIONS
+-- ════════════════════════════════════════════════════════════════════════════
+INSERT INTO permissions (permission_key, permission_name, description, module) VALUES
+-- Overview
+('ADMIN.OVERVIEW.VIEW',           'View Admin Overview',    'Access the admin dashboard overview',           'admin'),
+-- Families
+('ADMIN.FAMILIES.VIEW',           'View Families',          'View all registered families',                  'admin'),
+('ADMIN.FAMILIES.CREATE',         'Create Families',        'Register new families',                         'admin'),
+('ADMIN.FAMILIES.EDIT',           'Edit Families',          'Modify family records',                         'admin'),
+('ADMIN.FAMILIES.ARCHIVE',        'Archive Families',       'Archive family records',                        'admin'),
+('ADMIN.FAMILIES.IMPORT',         'Import Families',        'Bulk import families from Excel',               'admin'),
+-- Programmes
+('ADMIN.PROGRAMMES.VIEW',         'View Programmes',        'View all programmes',                           'admin'),
+('ADMIN.PROGRAMMES.CREATE',       'Create Programmes',      'Create new programmes',                         'admin'),
+('ADMIN.PROGRAMMES.EDIT',         'Edit Programmes',        'Modify programme details',                      'admin'),
+('ADMIN.PROGRAMMES.ARCHIVE',      'Archive Programmes',     'Archive programmes',                            'admin'),
+('ADMIN.PROGRAMMES.IMPORT',       'Import Programmes',      'Bulk import programmes from Excel',             'admin'),
+-- Grievances
+('ADMIN.GRIEVANCES.VIEW',         'View Grievances',        'View all grievances',                           'admin'),
+('ADMIN.GRIEVANCES.CREATE',       'Create Grievances',      'Create grievances on behalf of users',          'admin'),
+('ADMIN.GRIEVANCES.EDIT',         'Edit Grievances',        'Update grievance status',                       'admin'),
+('ADMIN.GRIEVANCES.ARCHIVE',      'Archive Grievances',     'Archive grievances',                            'admin'),
+('ADMIN.GRIEVANCES.ASSIGN',       'Assign Grievances',      'Assign grievances to case workers',             'admin'),
+-- Appeals
+('ADMIN.APPEALS.VIEW',            'View Appeals',           'View all appeals',                              'admin'),
+('ADMIN.APPEALS.EDIT',            'Edit Appeals',           'Update appeal status',                          'admin'),
+('ADMIN.APPEALS.REVIEW',          'Review Appeals',         'Approve or deny appeals',                       'admin'),
+('ADMIN.APPEALS.ARCHIVE',         'Archive Appeals',        'Archive appeals',                               'admin'),
+-- Users / Case Workers
+('ADMIN.USERS.VIEW',              'View Users',             'View all user accounts',                        'admin'),
+('ADMIN.CASEWORKERS.VIEW',        'View Case Workers',      'View case worker list',                         'admin'),
+('ADMIN.CASEWORKERS.CREATE',      'Create Case Workers',    'Invite case workers',                           'admin'),
+('ADMIN.CASEWORKERS.EDIT',        'Edit Case Workers',      'Manage case worker accounts',                   'admin'),
+-- Admins & Access
+('ADMIN.ACCESS.VIEW',             'View Admin Access',      'View admin accounts and roles',                 'admin'),
+('ADMIN.ACCESS.CREATE',           'Create Admin',           'Invite administrators',                         'admin'),
+('ADMIN.ACCESS.EDIT',             'Edit Admin',             'Modify administrator accounts',                 'admin'),
+-- Roles
+('ADMIN.ROLES.VIEW',              'View Roles',             'View all roles and their permissions',          'admin'),
+('ADMIN.ROLES.CREATE',            'Create Roles',           'Create new roles',                              'admin'),
+('ADMIN.ROLES.EDIT',              'Edit Roles',             'Edit role name and description',                'admin'),
+('ADMIN.ROLES.DELETE',            'Delete Roles',           'Delete custom roles',                           'admin'),
+('ADMIN.ROLES.MANAGE_PERMISSIONS','Manage Role Permissions','Add/remove permissions from roles',             'admin'),
+-- Audit Logs
+('ADMIN.AUDITLOGS.VIEW',          'View Audit Logs',        'View system-wide audit log',                    'admin')
+ON CONFLICT (permission_key) DO NOTHING;
 
--- Drop the old permanent_address_id FK (we use polymorphic addresses now)
-ALTER TABLE family.family 
-  DROP CONSTRAINT IF EXISTS family_permanent_address_id_fkey;
+-- ════════════════════════════════════════════════════════════════════════════
+-- PROGRAMME MANAGER PERMISSIONS (module = 'programme')
+-- ════════════════════════════════════════════════════════════════════════════
+INSERT INTO permissions (permission_key, permission_name, description, module) VALUES
+('PROGRAMME.PROGRAMMES.VIEW',       'View Programmes',          'View programme list and details',             'programme'),
+('PROGRAMME.PROGRAMMES.CREATE',     'Create Programmes',        'Create new programmes',                       'programme'),
+('PROGRAMME.PROGRAMMES.EDIT',       'Edit Programmes',          'Edit programme settings and configuration',   'programme'),
+('PROGRAMME.PROGRAMMES.DELETE',     'Delete Programmes',        'Delete or archive programmes',                'programme'),
+('PROGRAMME.PROGRAMMES.PUBLISH',    'Publish Programmes',       'Activate and publish draft programmes',       'programme'),
+('PROGRAMME.BENEFICIARIES.VIEW',    'View Beneficiaries',       'View programme beneficiaries and enrolments', 'programme'),
+('PROGRAMME.BENEFICIARIES.ENROLL',  'Enroll Beneficiaries',     'Enroll families into programmes',             'programme'),
+('PROGRAMME.BENEFICIARIES.MANAGE',  'Manage Beneficiaries',     'Approve, suspend, or exit beneficiaries',     'programme'),
+('PROGRAMME.RULES.VIEW',            'View Rules',               'View rule groups, rules, and variables',      'programme'),
+('PROGRAMME.RULES.MANAGE',          'Manage Rules',             'Create, edit, and delete eligibility rules',  'programme'),
+('PROGRAMME.REPORTS.VIEW',          'View Reports',             'View programme reports and analytics',        'programme'),
+('PROGRAMME.MANAGERS.VIEW',         'View Programme Managers',  'View users assigned as programme managers',   'programme'),
+('PROGRAMME.MANAGERS.MANAGE',       'Manage Programme Managers','Assign or remove programme managers',         'programme'),
+('PROGRAMME.ENGINE.RUN',            'Run Eligibility Engine',   'Run the eligibility evaluation engine',       'programme'),
+('PROGRAMME.AUDITLOGS.VIEW',        'View Programme Audit Logs','View programme change and exit audit logs',   'programme')
+ON CONFLICT (permission_key) DO NOTHING;
 
-ALTER TABLE family.family 
-  DROP COLUMN IF EXISTS permanent_address_id;
+-- ════════════════════════════════════════════════════════════════════════════
+-- CITIZEN PERMISSIONS
+-- ════════════════════════════════════════════════════════════════════════════
+INSERT INTO permissions (permission_key, permission_name, description, module) VALUES
+('CITIZEN.DASHBOARD.VIEW',  'View Dashboard',    'Access citizen dashboard',          'citizen'),
+('CITIZEN.FAMILY.VIEW',     'View Family',       'View own family details',           'citizen'),
+('CITIZEN.FAMILY.EDIT',     'Edit Family',       'Edit own family details',           'citizen'),
+('CITIZEN.PROFILE.VIEW',    'View Profile',      'View own profile',                  'citizen'),
+('CITIZEN.PROFILE.EDIT',    'Edit Profile',      'Edit own profile',                  'citizen'),
+('CITIZEN.DOCUMENTS.VIEW',  'View Documents',    'View own documents',                'citizen'),
+('CITIZEN.DOCUMENTS.CREATE','Upload Documents',  'Upload documents',                  'citizen'),
+('CITIZEN.DOCUMENTS.DELETE','Delete Documents',  'Remove own documents',              'citizen'),
+('CITIZEN.PROGRAMMES.VIEW', 'View Programmes',   'View available programmes',         'citizen'),
+('CITIZEN.PROGRAMMES.APPLY','Apply to Programmes','Apply for programmes',             'citizen'),
+('CITIZEN.BENEFITS.VIEW',   'View Benefits',     'View benefits and payments',        'citizen'),
+('CITIZEN.GRIEVANCES.VIEW', 'View Grievances',   'View and submit grievances',        'citizen'),
+('CITIZEN.GRIEVANCES.CREATE','Submit Grievances','Submit new grievances',             'citizen')
+ON CONFLICT (permission_key) DO NOTHING;
 
--- Update registration_status check constraint to allow UPPERCASE values
-ALTER TABLE family.family 
-  DROP CONSTRAINT IF EXISTS family_registration_status_check;
+-- ════════════════════════════════════════════════════════════════════════════
+-- SYSTEM-LEVEL PERMISSIONS
+-- ════════════════════════════════════════════════════════════════════════════
+INSERT INTO permissions (permission_key, permission_name, description, module) VALUES
+('SYSTEM.EXPORT', 'Export Data', 'Export any data from the system as CSV/Excel', 'system')
+ON CONFLICT (permission_key) DO NOTHING;
 
-ALTER TABLE family.family 
-  ADD CONSTRAINT family_registration_status_check 
-  CHECK (registration_status IN ('draft', 'pending_verification', 'verified', 'rejected', 'DRAFT', 'SUBMITTED', 'PENDING_VERIFICATION', 'VERIFIED', 'REJECTED'));
+-- ════════════════════════════════════════════════════════════════════════════
+-- ROLE → PERMISSION GRANTS
+-- SuperAdmin gets all; Admin gets admin.*; ProgrammeManager gets programme.*;
+-- CaseWorker and Citizen get minimal sets
+-- ════════════════════════════════════════════════════════════════════════════
 
--- ═══════════════════════════════════════════════════════════════════════════
--- STEP 2: FAMILY_MEMBER TABLE CHANGES
--- Add phone/email, drop old FK column
--- ═══════════════════════════════════════════════════════════════════════════
+-- SuperAdmin: all permissions
+INSERT INTO role_permissions (role_name, permission_key, granted_by)
+SELECT 'SuperAdmin', permission_key, 'system' FROM permissions
+ON CONFLICT (role_name, permission_key) DO NOTHING;
 
--- Add new columns to family_member table
-ALTER TABLE family.family_member 
-  ADD COLUMN IF NOT EXISTS phone VARCHAR(50),
-  ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+-- Admin: all ADMIN.* + SYSTEM.EXPORT
+INSERT INTO role_permissions (role_name, permission_key, granted_by)
+SELECT 'Admin', permission_key, 'system' FROM permissions
+WHERE module IN ('admin', 'system')
+ON CONFLICT (role_name, permission_key) DO NOTHING;
 
--- Drop the old current_address_id FK (we use polymorphic addresses now)
-ALTER TABLE family.family_member 
-  DROP CONSTRAINT IF EXISTS family_member_current_address_id_fkey;
+-- ProgrammeManager: gateway + all PROGRAMME.*
+INSERT INTO role_permissions (role_name, permission_key, granted_by) VALUES
+('ProgrammeManager', 'ADMIN.PROGRAMMES.VIEW', 'system')
+ON CONFLICT (role_name, permission_key) DO NOTHING;
 
-ALTER TABLE family.family_member 
-  DROP COLUMN IF EXISTS current_address_id;
+INSERT INTO role_permissions (role_name, permission_key, granted_by)
+SELECT 'ProgrammeManager', permission_key, 'system' FROM permissions
+WHERE module = 'programme'
+ON CONFLICT (role_name, permission_key) DO NOTHING;
 
--- ═══════════════════════════════════════════════════════════════════════════
--- STEP 3: ADDRESS TABLE - ENSURE POLYMORPHIC COLUMNS EXIST
--- ═══════════════════════════════════════════════════════════════════════════
+-- Citizen: citizen.* permissions
+INSERT INTO role_permissions (role_name, permission_key, granted_by)
+SELECT 'Citizen', permission_key, 'system' FROM permissions
+WHERE module = 'citizen'
+ON CONFLICT (role_name, permission_key) DO NOTHING;
 
--- Add polymorphic columns if they don't exist
-ALTER TABLE family.address 
-  ADD COLUMN IF NOT EXISTS entity_type VARCHAR(20),
-  ADD COLUMN IF NOT EXISTS entity_id UUID,
-  ADD COLUMN IF NOT EXISTS address_type VARCHAR(20);
+-- ════════════════════════════════════════════════════════════════════════════
+-- DONE — RBAC seed complete
+-- ════════════════════════════════════════════════════════════════════════════
 
--- FIRST: Convert existing lowercase values to UPPERCASE before adding constraints
-UPDATE family.address SET entity_type = UPPER(entity_type) WHERE entity_type IS NOT NULL;
-UPDATE family.address SET address_type = UPPER(address_type) WHERE address_type IS NOT NULL;
-
--- Add check constraints for entity_type and address_type
-ALTER TABLE family.address 
-  DROP CONSTRAINT IF EXISTS address_entity_type_check;
-
-ALTER TABLE family.address 
-  ADD CONSTRAINT address_entity_type_check 
-  CHECK (entity_type IN ('FAMILY', 'MEMBER'));
-
-ALTER TABLE family.address 
-  DROP CONSTRAINT IF EXISTS address_address_type_check;
-
-ALTER TABLE family.address 
-  ADD CONSTRAINT address_address_type_check 
-  CHECK (address_type IN ('PERMANENT', 'CURRENT'));
-
--- Create index for faster lookups
-CREATE INDEX IF NOT EXISTS idx_address_entity 
-  ON family.address(entity_type, entity_id);
-
-CREATE INDEX IF NOT EXISTS idx_address_type 
-  ON family.address(address_type);
-
--- ═══════════════════════════════════════════════════════════════════════════
--- STEP 4: DOCUMENTS TABLE - ENSURE POLYMORPHIC COLUMNS EXIST
--- ═══════════════════════════════════════════════════════════════════════════
-
-ALTER TABLE family.documents 
-  ADD COLUMN IF NOT EXISTS owner_type VARCHAR(20),
-  ADD COLUMN IF NOT EXISTS owner_id UUID,
-  ADD COLUMN IF NOT EXISTS file_url TEXT,
-  ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'UPLOADED';
-
--- Convert existing lowercase values to UPPERCASE before adding constraints
-UPDATE family.documents SET owner_type = UPPER(owner_type) WHERE owner_type IS NOT NULL;
-UPDATE family.documents SET status = UPPER(status) WHERE status IS NOT NULL;
-
--- Add check constraint for owner_type
-ALTER TABLE family.documents 
-  DROP CONSTRAINT IF EXISTS documents_owner_type_check;
-
-ALTER TABLE family.documents 
-  ADD CONSTRAINT documents_owner_type_check 
-  CHECK (owner_type IN ('FAMILY', 'MEMBER'));
-
--- Add check constraint for status
-ALTER TABLE family.documents 
-  DROP CONSTRAINT IF EXISTS documents_status_check;
-
-ALTER TABLE family.documents 
-  ADD CONSTRAINT documents_status_check 
-  CHECK (status IN ('UPLOADED', 'PENDING', 'VERIFIED', 'REJECTED'));
-
--- Create index for faster lookups
-CREATE INDEX IF NOT EXISTS idx_documents_owner 
-  ON family.documents(owner_type, owner_id);
-
--- ═══════════════════════════════════════════════════════════════════════════
--- STEP 5: FAMILY_HISTORY TABLE - ENSURE POLYMORPHIC COLUMNS EXIST
--- ═══════════════════════════════════════════════════════════════════════════
-
-ALTER TABLE family.family_history 
-  ADD COLUMN IF NOT EXISTS entity_type VARCHAR(20),
-  ADD COLUMN IF NOT EXISTS entity_id UUID;
-
--- Convert existing lowercase values to UPPERCASE before adding constraints
-UPDATE family.family_history SET entity_type = UPPER(entity_type) WHERE entity_type IS NOT NULL;
-
--- Add check constraint for entity_type
-ALTER TABLE family.family_history 
-  DROP CONSTRAINT IF EXISTS family_history_entity_type_check;
-
-ALTER TABLE family.family_history 
-  ADD CONSTRAINT family_history_entity_type_check 
-  CHECK (entity_type IN ('FAMILY', 'MEMBER', 'ADDRESS', 'DOCUMENT', 'ACCOUNT'));
-
--- ═══════════════════════════════════════════════════════════════════════════
--- STEP 6: DATA CLEANUP (DEV ONLY - REMOVES ALL TEST DATA)
--- ═══════════════════════════════════════════════════════════════════════════
-
--- Clear all existing test data (order matters due to FKs)
-DELETE FROM family.family_event_outbox;
-DELETE FROM family.family_history;
-DELETE FROM family.document_verification;
-DELETE FROM family.documents;
-DELETE FROM family.account_details;
-DELETE FROM family.biometric_metadata;
-DELETE FROM family.identity_match;
-DELETE FROM family.family_member;
-DELETE FROM family.address;
-DELETE FROM family.family;
-
--- ═══════════════════════════════════════════════════════════════════════════
--- VERIFICATION QUERY - Run after to confirm
--- ═══════════════════════════════════════════════════════════════════════════
-
--- SELECT 
---   'family' as table_name,
---   column_name,
---   data_type
--- FROM information_schema.columns 
--- WHERE table_schema = 'family' 
---   AND table_name = 'family'
---   AND column_name IN ('head_first_name', 'head_last_name', 'phone', 'email', 'permanent_address_id')
--- UNION ALL
--- SELECT 
---   'family_member' as table_name,
---   column_name,
---   data_type
--- FROM information_schema.columns 
--- WHERE table_schema = 'family' 
---   AND table_name = 'family_member'
---   AND column_name IN ('phone', 'email', 'current_address_id')
--- UNION ALL
--- SELECT 
---   'address' as table_name,
---   column_name,
---   data_type
--- FROM information_schema.columns 
--- WHERE table_schema = 'family' 
---   AND table_name = 'address'
---   AND column_name IN ('entity_type', 'entity_id', 'address_type');
-
-SELECT 'SCHEMA FIX COMPLETE' as result;

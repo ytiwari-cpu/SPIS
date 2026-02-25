@@ -12,7 +12,7 @@ export class BeneficiaryRepository extends BaseSupabaseRepository {
       .select(`
         *,
         programme:programme_master(
-          programme_id, name, description, status,
+          programme_id, programme_name, programme_code, description, status, active_flag,
           created_by, created_at, updated_at,
           programme_config(*), programme_payment_settings(*)
         )

@@ -160,10 +160,20 @@ export function getHiddenNavPaths(hasPermission: PermChecker): Set<string> {
     }
   }
 
-  // 4. Programme-manager-only: hide /admin/programmes from the Administration
-  //    section since they manage programmes exclusively via Programme Admin.
-  if (isProgrammeManagerOnly) {
+  // 4. For full admins: hide /admin/programmes from the Administration section
+  //    because Programme Admin (/programme-admin/*) is the dedicated management
+  //    view. Showing both causes a duplicate "Programmes" entry in the sidebar.
+  //
+  //    For programme-manager-only users: same — they use Programme Admin exclusively.
+  if (isAdminUser || isProgrammeManagerOnly) {
     hidden.add('/admin/programmes')
+  }
+
+  // 5. Deduplicate "Audit Logs" in the Audits and Reports section.
+  //    Full admins have /admin/audit-logs; programme managers have /programme-admin/audit-logs.
+  //    Hide the lower-tier entry for full admins so only one entry appears.
+  if (isAdminUser) {
+    hidden.add('/programme-admin/audit-logs')
   }
 
   return hidden

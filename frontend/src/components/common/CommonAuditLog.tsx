@@ -1,44 +1,43 @@
 /**
- * COMMON AUDIT LOG
+ * COMMON AUDIT LOGS
  *
- * Module-aware wrapper for the audit logs view.
+ * Permission-driven wrapper that renders the correct Audit Logs variant:
  *
- * Every module in the system can show its own audit log by providing a
- * `module` prop.  When no module is supplied the default (all) view is
- * shown.
+ *   ADMIN.AUDITLOGS.VIEW (full admin / super-admin)
+ *     → AdminAuditLogsContent  — system-wide audit trail
  *
- * Uses the same AdminAuditLogs component underneath — the `module`
- * prop is forwarded as a default resource_type filter.
+ *   PROGRAMME.AUDITLOGS.VIEW | ADMIN.PROGRAMMES.VIEW  (programme manager)
+ *     → AuditLogsPageContent   — programme-scoped audit log
  *
- * Usage:
- *   <CommonAuditLog />                       → all modules
- *   <CommonAuditLog module="family" />        → families only
- *   <CommonAuditLog module="programme" />     → programmes only
- *   <CommonAuditLog module="grievances" />    → grievances only
- *   <CommonAuditLog module="admin" />         → admin / access only
+ * All decisions are permission-driven — no role-name checks.
+ *
+ * Used by both /admin/audit-logs and /programme-admin/audit-logs routes
+ * so that a single nav entry serves every user role correctly.
  */
 
 import AdminAuditLogsContent from '@/components/superadmin/AdminAuditLogs'
+import AuditLogsPageContent  from '@/components/programme-admin/AuditLogsPage'
+import { usePermissions } from '@/lib/auth'
 
-export type AuditModule =
-  | 'family'
-  | 'programme'
-  | 'grievances'
-  | 'appeals'
-  | 'admin'
-  | 'access'
-  | 'roles'
-  | 'caseworkers'
+export type AuditLogsVariant = 'admin' | 'programme'
 
-export interface CommonAuditLogProps {
-  /** When set, pre-filters the audit logs to this module. */
-  module?: AuditModule
+/** Derive the variant from the user's permission set (exported for tests). */
+export function resolveAuditLogsVariant(
+  hasPermission: (p: string) => boolean,
+): AuditLogsVariant {
+  if (hasPermission('ADMIN.AUDITLOGS.VIEW')) return 'admin'
+  return 'programme'
 }
 
-export default function CommonAuditLog({ module: _module }: CommonAuditLogProps = {}) {
-  // AdminAuditLogs already has resource_type filter dropdown —
-  // pass `module` as a default pre-selected value via the module prop.
-  // For now the admin component handles everything; future iterations
-  // can accept `defaultResourceFilter` to auto-select.
-  return <AdminAuditLogsContent />
+export default function CommonAuditLogs() {
+  const { hasPermission } = usePermissions()
+  const variant = resolveAuditLogsVariant(hasPermission)
+
+  switch (variant) {
+    case 'admin':
+      return <AdminAuditLogsContent />
+    case 'programme':
+    default:
+      return <AuditLogsPageContent />
+  }
 }

@@ -1,5 +1,5 @@
 /**
- * Beneficiaries Page — Matches wireframe exactly:
+ * Enrollment Page — Matches wireframe:
  * Enrolled / Eligible tabs, search, Filters, Export CSV, data table.
  */
 import { useEffect, useState } from 'react'
@@ -52,8 +52,8 @@ export default function BeneficiariesPageContent() {
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="mb-6">
-                    <h1 className="text-2xl font-bold text-gray-900">Beneficiaries</h1>
-                    <p className="text-sm text-gray-500 mt-0.5">Manage and monitor beneficiaries for the National Social Protection System.</p>
+                    <h1 className="text-2xl font-bold text-gray-900">Enrollment</h1>
+                    <p className="text-sm text-gray-500 mt-0.5">Manage and monitor enrollment for the National Social Protection System.</p>
                 </div>
 
                 {/* Programme selector */}

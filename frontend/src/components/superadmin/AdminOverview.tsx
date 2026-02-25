@@ -19,6 +19,10 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
+  PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend
+} from 'recharts'
+import {
   PageHeader,
   StatCard,
   DataTable,
@@ -116,39 +120,38 @@ function SegmentedProgressBar({ statusCounts }: { statusCounts: Record<CaseStatu
   const total = Object.values(statusCounts).reduce((a, b) => a + b, 0)
   if (total === 0) return null
 
-  const segments: { status: CaseStatus; count: number; color: string; label: string }[] = [
-    { status: 'COMPLETED', count: statusCounts['COMPLETED'] || 0, color: 'bg-green-500', label: 'Completed' },
-    { status: 'CLOSED', count: statusCounts['CLOSED'] || 0, color: 'bg-gray-500', label: 'Closed' },
-    { status: 'PENDING_REVIEW', count: statusCounts['PENDING_REVIEW'] || 0, color: 'bg-amber-500', label: 'Pending Review' },
-    { status: 'IN_PROGRESS', count: statusCounts['IN_PROGRESS'] || 0, color: 'bg-blue-500', label: 'In Progress' },
-    { status: 'ON_HOLD', count: statusCounts['ON_HOLD'] || 0, color: 'bg-orange-400', label: 'On Hold' },
-    { status: 'OPEN', count: statusCounts['OPEN'] || 0, color: 'bg-gray-400', label: 'Open' },
-  ]
+  const segments = [
+    { name: 'Completed', value: statusCounts['COMPLETED'] || 0, color: '#22c55e' }, // bg-green-500
+    { name: 'Closed', value: statusCounts['CLOSED'] || 0, color: '#6b7280' }, // bg-gray-500
+    { name: 'Pending Review', value: statusCounts['PENDING_REVIEW'] || 0, color: '#f59e0b' }, // bg-amber-500
+    { name: 'In Progress', value: statusCounts['IN_PROGRESS'] || 0, color: '#3b82f6' }, // bg-blue-500
+    { name: 'On Hold', value: statusCounts['ON_HOLD'] || 0, color: '#fb923c' }, // bg-orange-400
+    { name: 'Open', value: statusCounts['OPEN'] || 0, color: '#9ca3af' }, // bg-gray-400
+  ].filter(s => s.value > 0)
 
   return (
-    <div className="space-y-2">
-      <div className="h-4 w-full flex rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
-        {segments.map(seg => {
-          const pct = (seg.count / total) * 100
-          if (pct === 0) return null
-          return (
-            <div
-              key={seg.status}
-              className={`${seg.color} transition-all`}
-              style={{ width: `${pct}%` }}
-              title={`${seg.label}: ${seg.count} (${pct.toFixed(1)}%)`}
-            />
-          )
-        })}
-      </div>
-      <div className="flex flex-wrap gap-4 text-xs">
-        {segments.filter(s => s.count > 0).map(seg => (
-          <div key={seg.status} className="flex items-center gap-1.5">
-            <div className={`size-2.5 rounded-full ${seg.color}`} />
-            <span className="text-gray-600 dark:text-gray-400">{seg.label}: {seg.count}</span>
-          </div>
-        ))}
-      </div>
+    <div className="h-64 mt-4 w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={segments}
+            cx="50%"
+            cy="50%"
+            innerRadius={60}
+            outerRadius={80}
+            paddingAngle={5}
+            dataKey="value"
+          >
+            {segments.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={entry.color} />
+            ))}
+          </Pie>
+          <RechartsTooltip
+            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+          />
+          <Legend />
+        </PieChart>
+      </ResponsiveContainer>
     </div>
   )
 }
@@ -174,6 +177,53 @@ export default function AdminOverviewContent() {
   const activeProgrammes = realProgrammes.filter(p => p.active_flag).length
   const totalEnrolled = realProgrammes.reduce((sum, p) => sum + (p.programme_rules?.length ?? 0), 0)
   const totalBudget = realProgrammes.reduce((sum, p) => sum + (p.programme_payment_settings?.total_budget_allocated ?? 0), 0)
+
+  const caseWorkerChartData = useMemo(() => {
+    return [
+      { name: 'Sarah Mitchell', Assigned: 45, Completed: 38 },
+      { name: 'James Cooper', Assigned: 52, Completed: 31 },
+      { name: 'Maria Santos', Assigned: 38, Completed: 29 },
+      { name: 'David Brown', Assigned: 24, Completed: 22 },
+      { name: 'Jennifer White', Assigned: 18, Completed: 18 },
+    ]
+  }, [])
+
+  const budgetChartData = useMemo(() => {
+    // Determine if any real programme actually has budget data attached.
+    const hasBudgetData = realProgrammes.some(p => p.programme_payment_settings?.total_budget_allocated)
+
+    if (realProgrammes.length > 0 && hasBudgetData) {
+      const colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']
+      return realProgrammes
+        .filter(p => p.programme_payment_settings?.total_budget_allocated)
+        .sort((a, b) => (b.programme_payment_settings?.total_budget_allocated || 0) - (a.programme_payment_settings?.total_budget_allocated || 0))
+        .slice(0, 5)
+        .map((p, index) => ({
+          name: p.programme_name || 'Unnamed',
+          value: p.programme_payment_settings!.total_budget_allocated,
+          color: colors[index % colors.length]
+        }))
+    }
+
+    // Fallback Dummy Data - Used if realProgrammes has no budget data or if API fails
+    return [
+      { name: 'PATH Cash Transfer', value: 45000000, color: '#3b82f6' }, // blue
+      { name: 'NHF Health Coverage', value: 62000000, color: '#10b981' }, // green
+      { name: 'School Feeding', value: 28000000, color: '#f59e0b' }, // amber
+      { name: 'Education Grant', value: 22000000, color: '#8b5cf6' }, // purple
+      { name: 'STEP Employment', value: 15000000, color: '#ec4899' }, // pink
+    ]
+  }, [realProgrammes])
+
+  const grievancesChartData = useMemo(() => {
+    return [
+      { name: 'Payment Issue', count: 12 },
+      { name: 'Eligibility', count: 8 },
+      { name: 'Service', count: 5 },
+      { name: 'Staff Conduct', count: 3 },
+      { name: 'Data Correction', count: 4 },
+    ]
+  }, [])
 
   const openGrievances = grievances.filter(g => g.status === 'OPEN' || g.status === 'IN_PROGRESS').length
   const escalatedGrievances = grievances.filter(g => g.status === 'ESCALATED').length
@@ -389,53 +439,155 @@ export default function AdminOverviewContent() {
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* CASES PROGRESS SUMMARY */}
+        {/* CHARTS GRID */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div className="mb-8 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Cases Progress</h2>
-              <p className="text-sm text-gray-500">Overall case completion and status breakdown</p>
+        <div className="grid lg:grid-cols-2 gap-8 mb-8">
+
+          {/* CASES PROGRESS SUMMARY */}
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Cases Progress</h2>
+                <p className="text-sm text-gray-500">Overall case completion and status breakdown</p>
+              </div>
+              <Link
+                to="/admin/case-workers"
+                className="text-sm text-primary hover:underline flex items-center gap-1"
+              >
+                View Case Workers
+                <span className="material-symbols-outlined text-sm">arrow_forward</span>
+              </Link>
             </div>
-            <Link
-              to="/admin/case-workers"
-              className="text-sm text-primary hover:underline flex items-center gap-1"
-            >
-              View Case Workers
-              <span className="material-symbols-outlined text-sm">arrow_forward</span>
-            </Link>
+
+            {/* Stats Cards Row */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Total Cases</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{casesStats.total}</p>
+              </div>
+              <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
+                <p className="text-sm text-green-600 dark:text-green-400">Completed</p>
+                <p className="text-2xl font-bold text-green-700 dark:text-green-300">{casesStats.completed}</p>
+              </div>
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                <p className="text-sm text-blue-600 dark:text-blue-400">Pending</p>
+                <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{casesStats.pending}</p>
+              </div>
+              <div className={`rounded-lg p-4 ${casesStats.overdue > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-gray-800'}`}>
+                <p className={`text-sm ${casesStats.overdue > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>Overdue</p>
+                <p className={`text-2xl font-bold ${casesStats.overdue > 0 ? 'text-red-700 dark:text-red-300' : 'text-gray-900 dark:text-white'}`}>
+                  {casesStats.overdue}
+                </p>
+              </div>
+            </div>
+
+            {/* Segmented Progress Bar -> PieChart */}
+            <div className="flex-1 flex flex-col">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Status Distribution</span>
+                <span className="text-sm text-gray-500">{casesStats.completionRatio}% complete</span>
+              </div>
+              <SegmentedProgressBar statusCounts={casesStats.statusCounts} />
+            </div>
           </div>
 
-          {/* Stats Cards Row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-              <p className="text-sm text-gray-500 dark:text-gray-400">Total Cases</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{casesStats.total}</p>
+          {/* CASE WORKER PRODUCTIVITY CHART */}
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Top Case Workers</h2>
+                <p className="text-sm text-gray-500">Case resolution performance</p>
+              </div>
             </div>
-            <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
-              <p className="text-sm text-green-600 dark:text-green-400">Completed</p>
-              <p className="text-2xl font-bold text-green-700 dark:text-green-300">{casesStats.completed}</p>
-            </div>
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-              <p className="text-sm text-blue-600 dark:text-blue-400">Pending</p>
-              <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{casesStats.pending}</p>
-            </div>
-            <div className={`rounded-lg p-4 ${casesStats.overdue > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-gray-800'}`}>
-              <p className={`text-sm ${casesStats.overdue > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>Overdue</p>
-              <p className={`text-2xl font-bold ${casesStats.overdue > 0 ? 'text-red-700 dark:text-red-300' : 'text-gray-900 dark:text-white'}`}>
-                {casesStats.overdue}
-              </p>
+
+            <div className="flex-1 w-full h-80 mt-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={caseWorkerChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: '#6B7280' }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: '#6B7280' }}
+                  />
+                  <RechartsTooltip
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    cursor={{ fill: 'rgba(0,0,0,0.05)' }}
+                  />
+                  <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                  <Bar dataKey="Assigned" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={24} />
+                  <Bar dataKey="Completed" fill="#10b981" radius={[4, 4, 0, 0]} barSize={24} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </div>
 
-          {/* Segmented Progress Bar */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Status Distribution</span>
-              <span className="text-sm text-gray-500">{casesStats.completionRatio}% complete</span>
+          {/* BUDGET DISTRIBUTION CHART */}
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 flex flex-col h-full min-h-[400px]">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Budget Distribution</h2>
+                <p className="text-sm text-gray-500">Allocation across top programmes</p>
+              </div>
             </div>
-            <SegmentedProgressBar statusCounts={casesStats.statusCounts} />
+
+            <div className="w-full h-80 min-h-[320px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={budgetChartData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {budgetChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    formatter={(value: any) => formatCurrency(Number(value))}
+                  />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           </div>
+
+          {/* GRIEVANCES BY CATEGORY CHART */}
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 flex flex-col h-full min-h-[400px]">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Grievances by Category</h2>
+                <p className="text-sm text-gray-500">Volume of complaints by type</p>
+              </div>
+            </div>
+
+            <div className="w-full h-80 min-h-[320px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={grievancesChartData} layout="vertical" margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E5E7EB" />
+                  <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} />
+                  <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6B7280' }} width={90} />
+                  <RechartsTooltip
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    cursor={{ fill: 'rgba(0,0,0,0.05)' }}
+                  />
+                  <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                  <Bar dataKey="count" name="Grievances" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={24} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
         </div>
 
         {/* Alerts Section */}

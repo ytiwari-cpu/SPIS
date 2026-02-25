@@ -91,6 +91,7 @@ END $$;
 CREATE TABLE IF NOT EXISTS users (
   user_id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email               VARCHAR(255) NOT NULL UNIQUE,
+  password_hash       TEXT DEFAULT NULL,            -- bcrypt hash, set via worker registration or password reset
   mfa_enabled         BOOLEAN NOT NULL DEFAULT FALSE,
   mfa_secret          TEXT,
   status              user_status NOT NULL DEFAULT 'pending',
@@ -190,6 +191,127 @@ DO $$ BEGIN
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
+
+-- ═══════════════════════════════════════════════════════════════
+-- STEP 6: RBAC — Roles, Permissions, Role-Permission mappings
+-- Applied via migration 011_comprehensive_rbac_schema + 013 + 014
+-- ═══════════════════════════════════════════════════════════════
+
+-- Roles table (independent of enum, supports custom roles)
+CREATE TABLE IF NOT EXISTS roles (
+    role_id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    role_name       VARCHAR(100) NOT NULL UNIQUE,
+    display_name    VARCHAR(200) NOT NULL,
+    description     TEXT,
+    role_type       VARCHAR(50) NOT NULL DEFAULT 'custom',   -- 'system' | 'custom'
+    is_active       BOOLEAN NOT NULL DEFAULT true,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_by      UUID,
+    CONSTRAINT roles_type_check CHECK (role_type IN ('system', 'custom'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_roles_name   ON roles (role_name);
+CREATE INDEX IF NOT EXISTS idx_roles_active ON roles (is_active) WHERE is_active = true;
+
+-- Seed system roles
+INSERT INTO roles (role_name, display_name, description, role_type) VALUES
+    ('SuperAdmin',       'Super Administrator', 'Full system access with all permissions',          'system'),
+    ('Admin',            'Administrator',       'System administrator with management access',      'system'),
+    ('ProgrammeManager', 'Programme Manager',   'Staff managing social protection programmes',      'system'),
+    ('CaseWorker',       'Case Worker',         'Staff managing citizen cases and applications',    'system'),
+    ('Citizen',          'Citizen',             'Regular citizens accessing the portal',            'system')
+ON CONFLICT (role_name) DO UPDATE SET
+    display_name = EXCLUDED.display_name,
+    description  = EXCLUDED.description,
+    role_type    = EXCLUDED.role_type;
+
+-- Permissions catalog
+CREATE TABLE IF NOT EXISTS permissions (
+    permission_key   VARCHAR(100) PRIMARY KEY,               -- e.g. 'ADMIN.FAMILIES.VIEW'
+    permission_name  VARCHAR(200) NOT NULL,
+    description      TEXT,
+    module           VARCHAR(50) NOT NULL DEFAULT 'admin',   -- 'admin', 'programme', 'citizen', 'system'
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_permissions_module ON permissions (module);
+
+-- Role ↔ Permission mapping
+CREATE TABLE IF NOT EXISTS role_permissions (
+    role_name      VARCHAR(100) NOT NULL REFERENCES roles(role_name) ON DELETE CASCADE,
+    permission_key VARCHAR(100) NOT NULL REFERENCES permissions(permission_key) ON DELETE CASCADE,
+    granted_by     VARCHAR(100) DEFAULT 'system',
+    granted_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (role_name, permission_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_role_permissions_role ON role_permissions (role_name);
+CREATE INDEX IF NOT EXISTS idx_role_permissions_perm ON role_permissions (permission_key);
+
+-- Per-user permission overrides (grant/revoke individual permissions)
+CREATE TABLE IF NOT EXISTS user_permissions (
+    user_id        UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    permission_key VARCHAR(100) NOT NULL REFERENCES permissions(permission_key) ON DELETE CASCADE,
+    granted        BOOLEAN NOT NULL DEFAULT true,    -- false = explicit deny
+    granted_by     UUID,
+    granted_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, permission_key)
+);
+
+-- Audit logs (immutable — never UPDATE or DELETE)
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    actor_sub       VARCHAR(255),
+    actor_email     VARCHAR(255),
+    actor_roles     TEXT[],
+    action          VARCHAR(100) NOT NULL,
+    method          VARCHAR(10)  NOT NULL,
+    path            VARCHAR(500) NOT NULL,
+    resource_type   VARCHAR(100),
+    resource_id     VARCHAR(255),
+    status_code     INTEGER NOT NULL,
+    request_id      VARCHAR(100),
+    ip_address      VARCHAR(45),
+    user_agent      TEXT,
+    request_summary  JSONB,
+    response_summary JSONB,
+    duration_ms     INTEGER,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_created   ON audit_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_actor     ON audit_logs (actor_sub);
+CREATE INDEX IF NOT EXISTS idx_audit_action    ON audit_logs (action);
+CREATE INDEX IF NOT EXISTS idx_audit_resource  ON audit_logs (resource_type, resource_id);
+
+COMMENT ON TABLE audit_logs IS 'Immutable audit log — NEVER DELETE or UPDATE rows';
+
+-- Import jobs tracking
+DO $$ BEGIN
+    CREATE TYPE import_status AS ENUM ('PENDING', 'VALIDATING', 'VALIDATED', 'IMPORTING', 'COMPLETED', 'FAILED', 'PARTIAL');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE TABLE IF NOT EXISTS import_jobs (
+    job_id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    resource_type       VARCHAR(100) NOT NULL,
+    file_name           VARCHAR(500) NOT NULL,
+    file_size           INTEGER,
+    status              import_status NOT NULL DEFAULT 'PENDING',
+    total_rows          INTEGER DEFAULT 0,
+    valid_rows          INTEGER DEFAULT 0,
+    error_rows          INTEGER DEFAULT 0,
+    validation_errors   JSONB,
+    imported_count      INTEGER DEFAULT 0,
+    skipped_count       INTEGER DEFAULT 0,
+    updated_count       INTEGER DEFAULT 0,
+    started_at          TIMESTAMPTZ,
+    completed_at        TIMESTAMPTZ,
+    uploaded_by         UUID,
+    uploaded_by_email   VARCHAR(255),
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 -- ═══════════════════════════════════════════════════════════════
 -- DONE! IAM service database ready.

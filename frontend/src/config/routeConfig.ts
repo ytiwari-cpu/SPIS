@@ -52,7 +52,7 @@ import {
   AdminGrievances, adminGrievancesPerm,
   AdminAppeals, adminAppealsPerm,
   AdminAdmins, adminAdminsPerm,
-  AdminAuditLogs, auditLogsPerm,
+  auditLogsPerm,
   AdminRoles, rolesPerm,
   AdminRoleForm, roleFormPerm,
   AdminRoleManagement, roleManagePerm,
@@ -62,14 +62,16 @@ import {
 
 // Programme Admin
 import ProgrammeDashboardPage, { requiredPermission as progPerm } from '@/pages/programme-admin/DashboardPage'
-import ProgrammesPage from '@/pages/programme-admin/ProgrammesPage'
 import BeneficiariesPage from '@/pages/programme-admin/BeneficiariesPage'
 import PaymentsPage from '@/pages/programme-admin/PaymentsPage'
 import ReportsPage from '@/pages/programme-admin/ReportsPage'
-import AuditLogsPage from '@/pages/programme-admin/AuditLogsPage'
 import ManagersPage from '@/pages/programme-admin/ManagersPage'
 import RuleGroupsPage from '@/pages/programme-admin/RuleGroupsPage'
 import VariablesPage from '@/pages/programme-admin/VariablesPage'
+
+// Common (permission-resolved wrappers)
+import CommonAuditLogsPage from '@/pages/CommonAuditLogsPage'
+import CommonProgrammesPage from '@/pages/CommonProgrammesPage'
 
 export const authenticatedRoutes: RouteEntry[] = [
   // ── Always accessible ──────────────────────────────────────────────────
@@ -93,7 +95,7 @@ export const authenticatedRoutes: RouteEntry[] = [
   { path: '/admin/grievances',                  component: AdminGrievances,      permission: adminGrievancesPerm },
   { path: '/admin/appeals',                     component: AdminAppeals,         permission: adminAppealsPerm },
   { path: '/admin/admin-access',                component: AdminAdmins,          permission: adminAdminsPerm },
-  { path: '/admin/audit-logs',                  component: AdminAuditLogs,       permission: auditLogsPerm },
+  { path: '/admin/audit-logs',                  component: CommonAuditLogsPage,  permission: auditLogsPerm },
   { path: '/admin/roles',                       component: AdminRoles,            permission: rolesPerm },
   { path: '/admin/roles/new',                   component: AdminRoleForm,         permission: 'ADMIN.ROLES.CREATE' },
   { path: '/admin/roles/:roleName/view',        component: AdminRoleForm,         permission: roleFormPerm },
@@ -104,11 +106,11 @@ export const authenticatedRoutes: RouteEntry[] = [
 
   // ── Programme Admin ────────────────────────────────────────────────────
   { path: '/programme-admin/dashboard',         component: ProgrammeDashboardPage, permission: [progPerm, 'PROGRAMME.PROGRAMMES.VIEW'] },
-  { path: '/programme-admin/programmes',        component: ProgrammesPage,         permission: [progPerm, 'PROGRAMME.PROGRAMMES.VIEW'] },
+  { path: '/programme-admin/programmes',        component: CommonProgrammesPage,   permission: [progPerm, 'PROGRAMME.PROGRAMMES.VIEW'] },
   { path: '/programme-admin/beneficiaries',     component: BeneficiariesPage,      permission: [progPerm, 'PROGRAMME.BENEFICIARIES.VIEW'] },
   { path: '/programme-admin/payments',          component: PaymentsPage,           permission: [progPerm, 'PROGRAMME.REPORTS.VIEW'] },
   { path: '/programme-admin/reports',           component: ReportsPage,            permission: [progPerm, 'PROGRAMME.REPORTS.VIEW'] },
-  { path: '/programme-admin/audit-logs',        component: AuditLogsPage,          permission: [progPerm, 'PROGRAMME.AUDITLOGS.VIEW'] },
+  { path: '/programme-admin/audit-logs',        component: CommonAuditLogsPage,    permission: [progPerm, 'PROGRAMME.AUDITLOGS.VIEW'] },
   { path: '/programme-admin/managers',          component: ManagersPage,           permission: [progPerm, 'PROGRAMME.MANAGERS.VIEW'] },
   { path: '/programme-admin/rule-groups',       component: RuleGroupsPage,         permission: [progPerm, 'PROGRAMME.RULES.VIEW'] },
   { path: '/programme-admin/variables',         component: VariablesPage,          permission: [progPerm, 'PROGRAMME.RULES.VIEW'] },

@@ -1,7 +1,7 @@
-import AdminProgrammesContent from '@/components/superadmin/AdminProgrammes'
+import AdminProgrammesTableContent from '@/components/superadmin/AdminProgrammesTable'
 
 export default function AdminProgrammes() {
-  return <AdminProgrammesContent />
+  return <AdminProgrammesTableContent />
 }
 
 export const requiredPermission = 'ADMIN.PROGRAMMES.VIEW'

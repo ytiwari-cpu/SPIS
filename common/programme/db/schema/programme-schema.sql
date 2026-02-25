@@ -19,6 +19,9 @@ CREATE TABLE IF NOT EXISTS programme.programme_master (
     programme_name VARCHAR(255) NOT NULL,
     description TEXT,
     active_flag BOOLEAN DEFAULT true,
+    status VARCHAR(20) DEFAULT 'DRAFT'
+        CHECK (status IN ('DRAFT', 'ACTIVE', 'INACTIVE')),
+    rules_tree JSONB,                    -- nested AND/OR eligibility rule tree
     created_by UUID,
     updated_by UUID,
     created_at TIMESTAMPTZ DEFAULT now(),
@@ -259,6 +262,22 @@ CREATE INDEX IF NOT EXISTS idx_custom_field_defs_table ON programme.custom_field
 CREATE INDEX IF NOT EXISTS idx_programme_rules_history_programme ON programme.programme_rules_history(programme_id);
 CREATE INDEX IF NOT EXISTS idx_programme_exit_history_programme ON programme.programme_exit_history(programme_id);
 CREATE INDEX IF NOT EXISTS idx_conditionality_compliance_programme ON programme.conditionality_compliance(programme_id);
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 16. programme_manager_link — Users assigned as managers of a programme
+-- Added via: migration 002_programme_redesign
+-- ═══════════════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS programme.programme_manager_link (
+    id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    programme_id UUID NOT NULL REFERENCES programme.programme_master(programme_id) ON DELETE CASCADE,
+    user_id      UUID NOT NULL,
+    added_by     UUID NOT NULL,
+    created_at   TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(programme_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_prog_mgr_link_user ON programme.programme_manager_link(user_id);
+CREATE INDEX IF NOT EXISTS idx_prog_mgr_link_prog ON programme.programme_manager_link(programme_id);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- SEED DATA: rule_variable_catalog
