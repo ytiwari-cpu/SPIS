@@ -10,7 +10,7 @@
 
 import { ApiSchema } from '../../../../base/apiSchema.js'
 import { MfaController } from './mfaController.js'
-import { requireAuth } from '../../middleware/auth.js'
+import { requireAuth } from '../../../../base/middleware/requireAuth.js'
 import { rateLimiters } from '../../middleware/rateLimiter.js'
 
 const enrollTotp = {

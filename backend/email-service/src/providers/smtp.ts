@@ -7,7 +7,8 @@
 import nodemailer from 'nodemailer'
 import type { Transporter } from 'nodemailer'
 import { config } from '../config.js'
-import { logger } from '../lib/logger.js'
+import { createLogger } from '../../../base/logger.js'
+const logger = createLogger('email-service')
 import type { EmailProviderAdapter, RenderedEmail, SendResult } from '../types.js'
 
 let transporter: Transporter | null = null

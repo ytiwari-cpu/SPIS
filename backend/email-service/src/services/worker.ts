@@ -13,7 +13,8 @@
 
 import 'dotenv/config'
 import { config } from '../config.js'
-import { logger } from '../lib/logger.js'
+import { createLogger } from '../../../base/logger.js'
+const logger = createLogger('email-service')
 import { connectBus, consume, publishEmailSend, publishEmailSent, publishEmailFailed, closeBus, QUEUES } from '../bus/rabbitmq.js'
 import { updateEmailStatus, getEmailRequest } from '../db/repository.js'
 import { renderEmail } from '../services/templateRenderer.js'

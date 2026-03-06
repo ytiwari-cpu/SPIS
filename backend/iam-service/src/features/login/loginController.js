@@ -1,7 +1,6 @@
 import { BaseController } from '../../../../base/baseController.js'
 import { LoginService } from './loginService.js'
 import { LoginRepository } from './loginRepository.js'
-import { logger } from '../../lib/logger.js'
 import { z } from 'zod'
 
 const LoginSchema = z.object({
@@ -43,7 +42,7 @@ export class LoginController extends BaseController {
     } catch (error) {
       const statusCode = error?.statusCode || 500
       const message    = error?.message || 'Internal server error'
-      if (statusCode >= 500) logger.error('Login error', { error: message })
+      if (statusCode >= 500) this.log.error('Login error', { error: message })
       return res.status(statusCode).json({
         success: false,
         error: {

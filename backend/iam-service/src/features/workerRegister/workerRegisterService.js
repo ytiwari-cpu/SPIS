@@ -8,7 +8,8 @@
 
 import bcrypt from 'bcrypt'
 import { BaseService } from '../../../../base/baseService.js'
-import { logger } from '../../lib/logger.js'
+import { createLogger } from '../../../../base/logger.js'
+const logger = createLogger('iam-service')
 import { hashNationalId, generateOtp, hashOtp, verifyOtp } from '../../lib/crypto.js'
 import { sendOtpEmail } from '../../lib/emailClient.js'
 import { WorkerRegisterRepository } from './workerRegisterRepository.js'

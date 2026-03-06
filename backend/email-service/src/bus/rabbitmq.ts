@@ -13,7 +13,8 @@
 
 import amqplib, { type Channel, type ChannelModel, type ConsumeMessage } from 'amqplib'
 import { config } from '../config.js'
-import { logger } from '../lib/logger.js'
+import { createLogger } from '../../../base/logger.js'
+const logger = createLogger('email-service')
 
 let connection: ChannelModel | null = null
 let publishChannel: Channel | null = null

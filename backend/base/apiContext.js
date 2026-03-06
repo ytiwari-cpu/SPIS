@@ -4,29 +4,42 @@
  * Wraps request, response, user, and logger into a single object
  * passed to all controllers, services, and repositories.
  *
+ * Enhanced:
+ *   - requestId propagation (from middleware or header)
+ *   - Structured logger child with requestId + userId embedded
+ *
  * Plain JavaScript — no TypeScript required.
  */
+
+import crypto from 'node:crypto'
 
 const defaultLogger = {
   info:  (msg, meta) => console.log(`[INFO]  ${msg}`, meta ?? ''),
   warn:  (msg, meta) => console.warn(`[WARN]  ${msg}`, meta ?? ''),
   error: (msg, meta) => console.error(`[ERROR] ${msg}`, meta ?? ''),
   debug: (msg, meta) => console.debug(`[DEBUG] ${msg}`, meta ?? ''),
+  child: () => defaultLogger,
 }
 
 export class ApiContext {
   /**
    * @param {import('express').Request} request
    * @param {import('express').Response} response
-   * @param {object} [logger]
+   * @param {object} [logger]  — structured logger (from createLogger)
    */
   constructor(request, response, logger) {
-    this.request  = request
-    this.response = response
-    this.req      = request           // alias for controllers using ctx.req
-    this.res      = response          // alias for controllers using ctx.res
-    this.user     = request.user      // attached by requireAuth middleware
-    this.logger   = logger ?? defaultLogger
+    this.request   = request
+    this.response  = response
+    this.req       = request           // alias for controllers using ctx.req
+    this.res       = response          // alias for controllers using ctx.res
+    this.user      = request.user      // attached by requireAuth middleware
+    this.requestId = request.requestId || request.headers?.['x-request-id'] || crypto.randomUUID()
+
+    // Create a child logger with requestId + userId embedded in every log line
+    const baseLogger = logger ?? defaultLogger
+    this.logger = typeof baseLogger.child === 'function'
+      ? baseLogger.child({ requestId: this.requestId, userId: this.user?.sub })
+      : baseLogger
   }
 
   get cookies() {

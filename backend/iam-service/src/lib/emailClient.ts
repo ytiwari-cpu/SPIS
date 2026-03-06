@@ -7,7 +7,8 @@
 
 import axios from 'axios'
 import { config } from '../config.js'
-import { logger } from './logger.js'
+import { createLogger } from '../../../base/logger.js'
+const logger = createLogger('iam-service')
 
 const client = axios.create({
   baseURL: config.emailServiceUrl,

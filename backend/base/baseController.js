@@ -13,11 +13,15 @@ export class BaseController {
     this.log     = context.logger
   }
 
-  respondOk(result = {})         { this.respondJson(result, 200) }
-  respondCreated(result = {})    { this.respondJson(result, 201) }
-  respondBadRequest(result = {}) { this.respondJson(result, 400) }
-  respondNotFound(result = {})   { this.respondJson(result, 404) }
-  respondForbidden(result = {})  { this.respondJson(result, 403) }
+  respondOk(result = {})                { this.respondJson(result, 200) }
+  respondCreated(result = {})           { this.respondJson(result, 201) }
+  respondBadRequest(result = {})        { this.respondJson(result, 400) }
+  respondUnauthorized(result = {})      { this.respondJson(result, 401) }
+  respondForbidden(result = {})         { this.respondJson(result, 403) }
+  respondNotFound(result = {})          { this.respondJson(result, 404) }
+  respondConflict(result = {})          { this.respondJson(result, 409) }
+  respondTooManyRequests(result = {})   { this.respondJson(result, 429) }
+  respondServiceUnavailable(result = {}){ this.respondJson(result, 503) }
 
   respondError(result = {}, statusCode = 500) {
     if (statusCode === 500) {

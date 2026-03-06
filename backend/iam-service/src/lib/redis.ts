@@ -9,7 +9,8 @@
 
 import Redis from 'ioredis'
 import { config } from '../config.js'
-import { logger } from './logger.js'
+import { createLogger } from '../../../base/logger.js'
+const logger = createLogger('iam-service')
 
 export const redis = new Redis.default(config.redisUrl, {
   keyPrefix: config.redisKeyPrefix,

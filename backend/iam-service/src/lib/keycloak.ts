@@ -10,7 +10,8 @@
  */
 
 import { config } from '../config.js'
-import { logger } from './logger.js'
+import { createLogger } from '../../../base/logger.js'
+const logger = createLogger('iam-service')
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose'
 
 // ══════════════════════════════════════════════════════════════

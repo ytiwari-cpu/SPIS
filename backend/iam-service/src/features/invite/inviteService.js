@@ -6,7 +6,8 @@
 
 import { BaseService } from '../../../../base/baseService.js'
 import { config } from '../../config.js'
-import { logger } from '../../lib/logger.js'
+import { createLogger } from '../../../../base/logger.js'
+const logger = createLogger('iam-service')
 import { generateOtp, hashOtp } from '../../lib/crypto.js'
 import { sendInviteEmail } from '../../lib/emailClient.js'
 import { cacheUserRegistryId } from '../../lib/redis.js'

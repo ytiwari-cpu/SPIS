@@ -11,7 +11,8 @@
 
 import 'dotenv/config'
 import { startEventWorker } from './services/eventHandlers.js'
-import { logger } from './lib/logger.js'
+import { createLogger } from '../../base/logger.js'
+const logger = createLogger('iam-service')
 
 logger.info('IAM Event Worker starting...')
 

@@ -9,7 +9,8 @@
 
 import Handlebars from 'handlebars'
 import { getLatestTemplate } from '../db/repository.js'
-import { logger } from '../lib/logger.js'
+import { createLogger } from '../../../base/logger.js'
+const logger = createLogger('email-service')
 import type { RenderedEmail } from '../types.js'
 
 // In-memory cache: key = `${templateCode}:${locale}:${version}`

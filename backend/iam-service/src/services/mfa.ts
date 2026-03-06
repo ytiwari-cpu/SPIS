@@ -8,7 +8,8 @@
 import * as OTPAuth from 'otpauth'
 import * as QRCode from 'qrcode'
 import { config } from '../config.js'
-import { logger } from '../lib/logger.js'
+import { createLogger } from '../../../base/logger.js'
+const logger = createLogger('iam-service')
 import { generateOtp, hashOtp, verifyOtp, generateTotpSecret } from '../lib/crypto.js'
 import { sendOtpEmail } from '../lib/emailClient.js'
 import {

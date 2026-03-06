@@ -7,7 +7,6 @@
 import { BaseController } from '../../../../base/baseController.js'
 import { WorkerRegisterService } from './workerRegisterService.js'
 import { WorkerRegisterRepository } from './workerRegisterRepository.js'
-import { logger } from '../../lib/logger.js'
 
 export class WorkerRegisterController extends BaseController {
   constructor(ctx) {
@@ -24,7 +23,7 @@ export class WorkerRegisterController extends BaseController {
     } catch (error) {
       const statusCode = error?.statusCode || 500
       const code       = error?.code       || 'REGISTRATION_ERROR'
-      logger.error('Worker registration error', { error })
+      this.log.error('Worker registration error', { error })
       this.context.response.status(statusCode).json({ success: false, error: { code, message: error.message || 'Registration failed' } })
     }
   }
@@ -37,7 +36,7 @@ export class WorkerRegisterController extends BaseController {
     } catch (error) {
       const statusCode = error?.statusCode || 500
       const code       = error?.code       || 'VERIFICATION_ERROR'
-      logger.error('Worker registration verification error', { error })
+      this.log.error('Worker registration verification error', { error })
       this.context.response.status(statusCode).json({ success: false, error: { code, message: error.message || 'Verification failed' } })
     }
   }

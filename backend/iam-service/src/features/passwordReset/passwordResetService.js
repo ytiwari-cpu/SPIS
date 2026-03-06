@@ -8,7 +8,8 @@
 import bcrypt from 'bcrypt'
 import { BaseService } from '../../../../base/baseService.js'
 import { config } from '../../config.js'
-import { logger } from '../../lib/logger.js'
+import { createLogger } from '../../../../base/logger.js'
+const logger = createLogger('iam-service')
 import { generateOtp, hashOtp, verifyOtp, hashNationalId } from '../../lib/crypto.js'
 import { sendOtpEmail } from '../../lib/emailClient.js'
 import { publishPasswordResetRequested } from '../../bus/rabbitmq.js'

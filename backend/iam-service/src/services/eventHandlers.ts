@@ -7,7 +7,8 @@
  *   - registry.events.USER_DELETED → disable account, revoke sessions
  */
 
-import { logger } from '../lib/logger.js'
+import { createLogger } from '../../../base/logger.js'
+const logger = createLogger('iam-service')
 import { INBOUND_KEYS, connectBus, consume, QUEUES, closeBus } from '../bus/rabbitmq.js'
 import { createInvitedAccount } from '../services/invite.js'
 import { hashNationalId } from '../lib/crypto.js'

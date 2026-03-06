@@ -21,7 +21,8 @@
 
 import { SignJWT } from 'jose'
 import { config } from '../config.js'
-import { logger } from '../lib/logger.js'
+import { createLogger } from '../../../base/logger.js'
+const logger = createLogger('iam-service')
 import { hashNationalId } from '../lib/crypto.js'
 import {
   authenticateUser as keycloakAuth,
@@ -126,10 +127,14 @@ export async function loginWithKeycloak(params: {
       throw err
     }
 
-    // Log the specific error for debugging
-    logger.warn('Keycloak authentication failed', {
+    // Log full Keycloak error details for debugging
+    const kcErrMessage = kcError instanceof Error ? kcError.message : String(kcError)
+    const kcErrDetail = (kcError as any)?.response?.data ?? (kcError as any)?.cause ?? null
+    logger.error('Keycloak authentication failed — check Keycloak connectivity and realm config', {
       user_id: localUser.user_id,
-      error: kcError instanceof Error ? kcError.message : String(kcError),
+      keycloak_url: `${config.keycloak.baseUrl}/realms/${config.keycloak.realm}`,
+      error: kcErrMessage,
+      detail: kcErrDetail,
     })
 
     const err = new Error('Invalid credentials')

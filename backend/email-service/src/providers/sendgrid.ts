@@ -4,7 +4,8 @@
 
 import sgMail from '@sendgrid/mail'
 import { config } from '../config.js'
-import { logger } from '../lib/logger.js'
+import { createLogger } from '../../../base/logger.js'
+const logger = createLogger('email-service')
 import type { EmailProviderAdapter, RenderedEmail, SendResult } from '../types.js'
 
 if (config.sendgrid.apiKey) {

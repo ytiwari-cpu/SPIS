@@ -1,4 +1,5 @@
 import { ApiContext } from './apiContext.js'
+import { QueryHelper } from './queryHelper.js'
 
 /**
  * BaseDbRepository
@@ -6,6 +7,10 @@ import { ApiContext } from './apiContext.js'
  * Base repository for services that use a pg Pool (iam-service, email-service).
  * Accepts the pg Pool as a constructor argument so each service can inject
  * its own pool without path coupling.
+ *
+ * Enhanced:
+ *   - QueryHelper integration via this.qh() for fluent queries
+ *   - Transaction support via this.transaction(callback)
  */
 export class BaseDbRepository {
   /**
@@ -19,6 +24,14 @@ export class BaseDbRepository {
     this.context = context
     this.log     = context.logger
     this.pool    = pool
+  }
+
+  /**
+   * Get a QueryHelper instance scoped to this repository's pool.
+   * @returns {QueryHelper}
+   */
+  qh() {
+    return new QueryHelper(this.pool)
   }
 
   /**
@@ -52,5 +65,27 @@ export class BaseDbRepository {
   async execute(sql, params = []) {
     const result = await this.pool.query(sql, params)
     return result.rowCount
+  }
+
+  /**
+   * Run a callback inside a database transaction.
+   *
+   * @param {(client: import('pg').PoolClient) => Promise<T>} callback
+   * @returns {Promise<T>}
+   * @template T
+   */
+  async transaction(callback) {
+    const client = await this.pool.connect()
+    try {
+      await client.query('BEGIN')
+      const result = await callback(client)
+      await client.query('COMMIT')
+      return result
+    } catch (err) {
+      await client.query('ROLLBACK')
+      throw err
+    } finally {
+      client.release()
+    }
   }
 }

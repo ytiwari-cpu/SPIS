@@ -10,22 +10,26 @@ import cors from 'cors'
 import helmet from 'helmet'
 import morgan from 'morgan'
 
+import { createLogger } from '../../base/logger.js'
+import { requestId }    from '../../base/middleware/requestId.js'
+import { errorHandler as createErrorHandler, notFound } from '../../base/middleware/errorHandler.js'
+
 // Feature route initializers (4-layer pattern)
-import { AuthApi }     from './features/auth/api.js'
-import { FamilyApi }   from './features/family/api.js'
-import { MemberApi, MemberPublicApi } from './features/member/api.js'
-import { AddressApi }  from './features/address/api.js'
-import { DocumentApi } from './features/document/api.js'
-import { CitizensApi } from './features/citizens/api.js'
+import { AuthApi }     from './modules/features/auth/authApi.js'
+import { FamilyApi }   from './modules/features/family/familyApi.js'
+import { MemberApi, MemberPublicApi } from './modules/features/member/memberApi.js'
+import { AddressApi }  from './modules/features/address/addressApi.js'
+import { DocumentApi } from './modules/features/document/documentApi.js'
+import { CitizensApi } from './modules/features/citizens/citizensApi.js'
 
 // Legacy complex routers kept as-is
 import { devRouter }          from './routes/dev.routes.js'
 import { registrationRouter } from './routes/registration.routes.js'
 import { uploadRouter }       from './routes/upload.routes.js'
 
-import { errorHandler } from './middleware/errorHandler.js'
-import { notFound }     from './middleware/notFound.js'
 import { testConnection } from './lib/supabase.js'
+
+const logger = createLogger('family-service')
 
 /**
  * Creates and configures the Express app.
@@ -33,6 +37,9 @@ import { testConnection } from './lib/supabase.js'
  */
 export function createApp() {
   const app = express()
+
+  // ── Request ID (must be first) ──────────────────────────────
+  app.use(requestId())
 
   // ── Security ────────────────────────────────────────────────
   app.use(helmet())
@@ -66,23 +73,22 @@ export function createApp() {
   app.use('/api/v1/upload', uploadRouter)
 
   // ── Feature routes (4-layer: api → controller → service → repository) ─
-  AuthApi.register(app)        // /api/v1/auth/*
-  FamilyApi.register(app)      // /api/v1/families/*
-  MemberApi.register(app)      // /api/v1/members/*
-  MemberPublicApi.register(app) // /api/v1/public/members/lookup
-  AddressApi.register(app)     // /api/v1/addresses/*
-  DocumentApi.register(app)    // /api/v1/documents/*
-  CitizensApi.register(app)    // /api/v1/citizens/*
+  AuthApi.register(app, undefined, { logger })        // /api/v1/auth/*
+  FamilyApi.register(app, undefined, { logger })      // /api/v1/families/*
+  MemberApi.register(app, undefined, { logger })      // /api/v1/members/*
+  MemberPublicApi.register(app, undefined, { logger }) // /api/v1/public/members/lookup
+  AddressApi.register(app, undefined, { logger })     // /api/v1/addresses/*
+  DocumentApi.register(app, undefined, { logger })    // /api/v1/documents/*
+  CitizensApi.register(app, undefined, { logger })    // /api/v1/citizens/*
 
   // ── DEV-ONLY routes ──────────────────────────────────────────
   if (process.env.NODE_ENV !== 'production') {
     app.use('/api/v1/dev', devRouter)
   }
 
-  // ── Error handling ───────────────────────────────────────────
+  // ── Error handling (centralized) ─────────────────────────────
   app.use(notFound)
-  app.use(errorHandler)
+  app.use(createErrorHandler(logger))
 
   return app
 }
-

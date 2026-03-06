@@ -1,7 +1,6 @@
 import { BaseController } from '../../../../base/baseController.js'
 import { AdminService } from './adminService.js'
 import { AdminRepository } from './adminRepository.js'
-import { logger } from '../../lib/logger.js'
 
 export class AdminController extends BaseController {
   constructor(ctx) {
@@ -18,7 +17,7 @@ export class AdminController extends BaseController {
       const permissions = await this.service.getMyPermissions(userId)
       this.respondOk({ success: true, data: { user_id: userId, permissions } })
     } catch (error) {
-      logger.error('Error fetching current user permissions', { user_id: this.context.user?.sub, error: error.message })
+      this.log.error('Error fetching current user permissions', { user_id: this.context.user?.sub, error: error.message })
       this.respondError({ success: false, error: { code: 'FETCH_ERROR', message: 'Failed to fetch user permissions' } })
     }
   }
@@ -41,7 +40,7 @@ export class AdminController extends BaseController {
         pagination: { page: pageNum, limit: limitNum, total: result.total, totalPages: Math.ceil(result.total / limitNum) },
       })
     } catch (error) {
-      logger.error('Error listing users', { error: error.message })
+      this.log.error('Error listing users', { error: error.message })
       this.respondError({ success: false, error: { code: 'FETCH_ERROR', message: 'Failed to fetch users' } })
     }
   }
@@ -53,7 +52,7 @@ export class AdminController extends BaseController {
       if (!user) return this.respondNotFound({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } })
       this.respondOk({ success: true, data: user })
     } catch (error) {
-      logger.error('Error fetching user', { error: error.message })
+      this.log.error('Error fetching user', { error: error.message })
       this.respondError({ success: false, error: { code: 'FETCH_ERROR', message: 'Failed to fetch user' } })
     }
   }
@@ -66,10 +65,10 @@ export class AdminController extends BaseController {
         return this.respondBadRequest({ success: false, error: { code: 'VALIDATION_ERROR', message: 'roles must be an array' } })
       }
       const user = await this.service.updateUserRoles(userId, roles)
-      logger.info('User roles updated', { user_id: userId, roles, updated_by: this.context.user?.email || 'system' })
+      this.log.info('User roles updated', { user_id: userId, roles, updated_by: this.context.user?.email || 'system' })
       this.respondOk({ success: true, data: user })
     } catch (error) {
-      logger.error('Error updating user roles', { error: error.message })
+      this.log.error('Error updating user roles', { error: error.message })
       this.respondError({ success: false, error: { code: 'UPDATE_ERROR', message: 'Failed to update user roles' } })
     }
   }

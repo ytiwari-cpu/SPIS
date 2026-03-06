@@ -4,7 +4,8 @@
 
 import { SignJWT } from 'jose'
 import { config } from '../config.js'
-import { logger } from '../lib/logger.js'
+import { createLogger } from '../../../base/logger.js'
+const logger = createLogger('iam-service')
 import { hashNationalId } from '../lib/crypto.js'
 import {
   getUserByNationalIdHash,

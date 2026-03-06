@@ -13,7 +13,8 @@ import { createApp } from './api.js'
 import { config } from './config.js'
 import { connectBus, closeBus } from './bus/rabbitmq.js'
 import { pool } from './db/pool.js'
-import { logger } from './lib/logger.js'
+import { createLogger } from '../../base/logger.js'
+const logger = createLogger('email-service')
 
 const app = createApp()
 

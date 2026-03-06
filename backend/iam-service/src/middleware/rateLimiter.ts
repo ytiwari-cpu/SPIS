@@ -7,7 +7,8 @@
 
 import type { Request, Response, NextFunction } from 'express'
 import { incrementRateCounter, getRateCounter } from '../lib/redis.js'
-import { logger } from '../lib/logger.js'
+import { createLogger } from '../../../base/logger.js'
+const logger = createLogger('iam-service')
 
 interface RateLimitOptions {
   /** Unique key prefix (e.g. 'login', 'otp-request') */

@@ -8,7 +8,8 @@ import { config } from './config.js'
 import { connectBus, closeBus } from './bus/rabbitmq.js'
 import { pool } from './db/pool.js'
 import { closeRedis } from './lib/redis.js'
-import { logger } from './lib/logger.js'
+import { createLogger } from '../../base/logger.js'
+const logger = createLogger('iam-service')
 
 const app = createApp()
 

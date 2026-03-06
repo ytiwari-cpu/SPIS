@@ -11,7 +11,8 @@
 
 import './dotenv-config.js'
 import { startWorker } from './services/worker.js'
-import { logger } from './lib/logger.js'
+import { createLogger } from '../../base/logger.js'
+const logger = createLogger('email-service')
 
 logger.info('Email Service Worker starting...')
 
