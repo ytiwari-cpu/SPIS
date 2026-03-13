@@ -223,20 +223,20 @@ const token_jwt = await new SignJWT({
 **What We Did:**
 Created comprehensive documentation package:
 
-1. **Main Folder:** `/presentation/`
-   - `00-PROJECT-OVERVIEW.md` - Complete project summary
-   - `02-DEVELOPMENT-TIMELINE-AND-PROCESS.md` - Development process
-   - `03-ALL-USER-REQUESTS.md` - This file
+1. **Project Docs (flat):** `common/DOCS/`
+   - `PROJECT_OVERVIEW.md` - Complete project summary
+   - `PROJECT_DEVELOPMENT_TIMELINE_AND_PROCESS.md` - Development process
+   - `PROJECT_ALL_USER_REQUESTS.md` - This file
 
-2. **Family Folder:** `/presentation/family/`
-   - `01-FAMILY-SERVICE-OVERVIEW.md` - Service documentation
-   - `02-USER-REQUESTS-AND-SOLUTIONS.md` - Detailed implementation
+2. **Family Module Docs (flat):** `common/DOCS/`
+   - `FAMILY_SERVICE_OVERVIEW.md` - Service documentation
+   - `FAMILY_USER_REQUESTS_AND_SOLUTIONS.md` - Detailed implementation
 
-3. **IAM Folder:** `/presentation/iam/`
-   - `01-IAM-SERVICE-OVERVIEW.md` - Complete IAM documentation
+3. **IAM Module Docs (flat):** `common/DOCS/`
+   - `IAM_SERVICE_OVERVIEW.md` - Complete IAM documentation
 
-4. **Email Folder:** `/presentation/email/`
-   - `01-EMAIL-SERVICE-OVERVIEW.md` - Email service details
+4. **Email Module Docs (flat):** `common/DOCS/`
+   - `EMAIL_SERVICE_OVERVIEW.md` - Email service details
 
 **Outcome:** ✅ Complete presentation package created
 

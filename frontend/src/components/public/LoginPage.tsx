@@ -11,7 +11,7 @@ function normalizeNationalId(value: string): string {
 
 export default function LoginPageContent() {
   const navigate = useNavigate()
-  const { login, isAuthenticated, setFamilyDetails } = useAuthStore()
+  const { login, isAuthenticated, setFamilyDetails, setNeedsPasswordSetup } = useAuthStore()
 
   const [loginMode, setLoginMode] = useState<'password' | 'otp'>('password')
   const [nationalId, setNationalId] = useState('')
@@ -45,6 +45,12 @@ export default function LoginPageContent() {
     })
     
     login(sessionData)
+
+    // If this is a brand-new citizen (first OTP login from family_member),
+    // mark that they need to set a password — the Dashboard will show a forced modal.
+    if (sessionData.is_new_user) {
+      setNeedsPasswordSetup(true)
+    }
 
     // Only fetch family details for users with CITIZEN permissions
     // Staff users (ADMIN.* only) don't have attached families

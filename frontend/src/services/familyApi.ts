@@ -116,6 +116,18 @@ export const authApi = {
     const response = await api.post<ApiResponse<{ message: string }>>('/auth/logout')
     return response.data
   },
+
+  /**
+   * Set initial password for a newly-onboarded citizen who logged in via OTP.
+   * The Authorization header (Bearer token) is forwarded so IAM can identify them.
+   */
+  setInitialPassword: async (newPassword: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.post<ApiResponse<{ message: string }>>(
+      '/auth/set-initial-password',
+      { new_password: newPassword }
+    )
+    return response.data
+  },
 }
 
 // ════════════════════════════════════════════════════════════════════════════

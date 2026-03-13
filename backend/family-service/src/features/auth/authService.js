@@ -80,6 +80,19 @@ export class AuthService {
     return { status: response.ok ? 200 : response.status, json }
   }
 
+  async proxySetInitialPassword(newPassword, authHeader) {
+    const response = await fetch(`${IAM_SERVICE_URL}/iam/otp-login/set-initial-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authHeader ? { Authorization: authHeader } : {}),
+      },
+      body: JSON.stringify({ new_password: newPassword }),
+    })
+    const json = await response.json()
+    return { status: response.status, json }
+  }
+
   async verifyOtpLogin(nationalIdRaw, otp) {
     const cleanNationalId = normalizeNationalId(nationalIdRaw)
     const iamResponse = await fetch(`${IAM_SERVICE_URL}/iam/otp-login/verify`, {

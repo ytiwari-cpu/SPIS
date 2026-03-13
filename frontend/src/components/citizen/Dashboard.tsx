@@ -4,6 +4,7 @@ import { useAuthStore, useFamilyUuid } from '@/store/authStore'
 import { familyApi } from '@/services/familyApi'
 import { authFetch, extractApiError } from '@/services/authFetch'
 import type { DbFamilyWithDetails, RegistrationStatus } from '@/types/database'
+import SetPasswordModal from '@/components/citizen/SetPasswordModal'
 
 const getStatusBadge = (status: RegistrationStatus) => {
   const styles: Record<string, string> = {
@@ -20,7 +21,7 @@ const getStatusBadge = (status: RegistrationStatus) => {
 }
 
 export default function DashboardContent() {
-  const { session, headMember, setFamilyDetails } = useAuthStore()
+  const { session, headMember, setFamilyDetails, needsPasswordSetup } = useAuthStore()
   const navigate = useNavigate()
   const familyUuid = useFamilyUuid()  // UUID for API calls
   const [familyData, setFamilyData] = useState<DbFamilyWithDetails | null>(null)
@@ -180,9 +181,13 @@ export default function DashboardContent() {
     : session?.family_id || 'Citizen'
 
   const memberCount = members.length
+  const membersNeeded = Math.max(0, (familyData.household_size || 0) - memberCount)
 
   return (
     <div className="p-4 md:p-8">
+      {/* Forced password-setup modal for first-time OTP logins — no close button */}
+      {needsPasswordSetup && <SetPasswordModal />}
+
       <div className="max-w-4xl mx-auto">
         {/* Welcome Header */}
         <header className="mb-6">
@@ -235,10 +240,22 @@ export default function DashboardContent() {
               <span className="material-symbols-outlined text-amber-600 text-2xl shrink-0 mt-0.5">edit_note</span>
               <div className="flex-1">
                 <h3 className="font-bold text-amber-800 dark:text-amber-300">Registration in Draft</h3>
-                <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
-                  Your family registration is saved as a draft with {memberCount} member{memberCount !== 1 ? 's' : ''}.
-                  Submit to send for verification. The household size will be updated to match your actual member count.
-                </p>
+
+                {membersNeeded > 0 ? (
+                  <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
+                    Your registration has{' '}
+                    <strong>{memberCount} of {familyData.household_size} member{familyData.household_size === 1 ? '' : 's'}</strong>{' '}
+                    filled in. You need to add{' '}
+                    <strong>{membersNeeded} more member{membersNeeded === 1 ? '' : 's'}</strong>{' '}
+                    before you can submit — or go back to edit the household size.
+                  </p>
+                ) : (
+                  <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
+                    Your family registration is saved as a draft with{' '}
+                    <strong>{memberCount} member{memberCount === 1 ? '' : 's'}</strong>. Submit to send for verification.
+                  </p>
+                )}
+
                 {submitError && (
                   <div className="mt-2 p-2 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded text-sm text-red-700 dark:text-red-400">
                     {submitError}
@@ -249,30 +266,40 @@ export default function DashboardContent() {
                     Registration submitted successfully!
                   </div>
                 )}
-                <div className="flex gap-3 mt-3">
-                  <button
-                    onClick={handleSubmitRegistration}
-                    disabled={isSubmitting || memberCount === 0}
-                    className="px-5 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 flex items-center gap-2 text-sm"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>
-                        Submitting…
-                      </>
-                    ) : (
-                      <>
-                        <span className="material-symbols-outlined text-base">send</span>
-                        Submit Registration
-                      </>
-                    )}
-                  </button>
+
+                <div className="flex flex-wrap gap-3 mt-3">
+                {(() => {
+                  const memberWord = membersNeeded === 1 ? 'member' : 'members'
+                  const submitTitle = membersNeeded > 0
+                    ? `Add ${membersNeeded} more ${memberWord} first`
+                    : undefined
+                  return (
+                    <button
+                      onClick={handleSubmitRegistration}
+                      disabled={isSubmitting || memberCount === 0 || membersNeeded > 0}
+                      title={submitTitle}
+                      className="px-5 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>
+                          {' '}Submitting…
+                        </>
+                      ) : (
+                        <>
+                          <span className="material-symbols-outlined text-base">send</span>
+                          {' '}Submit Registration
+                        </>
+                      )}
+                    </button>
+                  )
+                })()}
                   <Link
                     to={`/register?edit=${familyUuid}`}
                     className="px-5 py-2 border border-gray-300 dark:border-gray-600 rounded-lg font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2 text-sm"
                   >
                     <span className="material-symbols-outlined text-base">edit</span>
-                    Continue Editing
+                    {membersNeeded > 0 ? `Add Members (${membersNeeded} left)` : 'Continue Editing'}
                   </Link>
                 </div>
               </div>

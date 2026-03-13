@@ -38,6 +38,8 @@ interface FamilyData {
   head_member_id?: string
   head_first_name?: string
   head_last_name?: string
+  phone?: string | null
+  email?: string | null
   // Migration 010 fields
   programme?: string | null
   payment_option?: string | null
@@ -179,7 +181,9 @@ async function apiCall<T>(
 // ═══════════════════════════════════════════════════════════════════════════
 
 function Step1FamilyAndAddress({ 
-  onNext, 
+  onNext,
+  onBack,
+  initialData,
   isLoading, 
   error 
 }: { 
@@ -206,40 +210,44 @@ function Step1FamilyAndAddress({
     directions_to_house?: string
     mailing_address?: AddressData
   }) => void
+  onBack: () => void
+  initialData?: { family: FamilyData; address: AddressData | null }
   isLoading: boolean
   error: string | null
 }) {
+  const f = initialData?.family ?? null
+  const a = initialData?.address ?? null
   const [formData, setFormData] = useState({
-    household_size: 1,
-    intake_channel: 'web_portal',
-    head_first_name: '',
-    head_last_name: '',
+    household_size: f?.household_size ?? 1,
+    intake_channel: f?.intake_channel ?? 'web_portal',
+    head_first_name: f?.head_first_name ?? '',
+    head_last_name: f?.head_last_name ?? '',
     head_national_id: '',
-    phone: '',
-    email: '',
-    geo_code: '',
-    vulnerability_flag: false,
+    phone: f?.phone ?? '',
+    email: f?.email ?? '',
+    geo_code: f?.geo_code ?? '',
+    vulnerability_flag: f?.vulnerability_flag ?? false,
     // Migration 010 fields
-    programme: '',
-    payment_option: '',
-    social_worker_zone: '',
-    social_worker_code: '',
-    head_middle_names: '',
-    head_alias: '',
-    head_mothers_maiden_name: '',
-    mailing_address_different: false,
-    directions_to_house: '',
+    programme: f?.programme ?? '',
+    payment_option: f?.payment_option ?? '',
+    social_worker_zone: f?.social_worker_zone ?? '',
+    social_worker_code: f?.social_worker_code ?? '',
+    head_middle_names: f?.head_middle_names ?? '',
+    head_alias: f?.head_alias ?? '',
+    head_mothers_maiden_name: f?.head_mothers_maiden_name ?? '',
+    mailing_address_different: f?.mailing_address_different ?? false,
+    directions_to_house: f?.directions_to_house ?? '',
     address: {
-      line1: '',
-      line2: '',
-      parish: '',
-      district: '',
-      geo_code: '',
-      lot_apt: '',
-      street_district: '',
-      post_office: '',
-      post_code: '',
-      area_type: '',
+      line1: a?.line1 ?? '',
+      line2: a?.line2 ?? '',
+      parish: a?.parish ?? '',
+      district: a?.district ?? '',
+      geo_code: a?.geo_code ?? '',
+      lot_apt: a?.lot_apt ?? '',
+      street_district: a?.street_district ?? '',
+      post_office: a?.post_office ?? '',
+      post_code: a?.post_code ?? '',
+      area_type: a?.area_type ?? '',
     } as AddressData,
     mailing_address: {
       line1: '',
@@ -885,23 +893,33 @@ function Step1FamilyAndAddress({
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={isLoading || checkingNid}
-          className="w-full py-3 px-4 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-2"
-        >
-          {isLoading || checkingNid ? (
-            <>
-              <span className="material-symbols-outlined animate-spin">progress_activity</span>
-              {checkingNid ? 'Verifying National ID...' : 'Creating Family...'}
-            </>
-          ) : (
-            <>
-              <span className="material-symbols-outlined">arrow_forward</span>
-              Create Family & Continue
-            </>
-          )}
-        </button>
+        <div className="flex gap-4">
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex-1 py-3 px-4 border border-gray-300 dark:border-gray-600 rounded-lg font-medium flex items-center justify-center gap-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+          >
+            <span className="material-symbols-outlined text-base">arrow_back</span>{' '}
+            Back
+          </button>
+          <button
+            type="submit"
+            disabled={isLoading || checkingNid}
+            className="flex-1 py-3 px-4 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {isLoading || checkingNid ? (
+              <>
+                <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                {checkingNid ? 'Verifying National ID...' : 'Creating Family...'}
+              </>
+            ) : (
+              <>
+                <span className="material-symbols-outlined">arrow_forward</span>{' '}
+                Create Family & Continue
+              </>
+            )}
+          </button>
+        </div>
       </form>
     </div>
   )
@@ -914,9 +932,11 @@ function Step1FamilyAndAddress({
 function Step2Members({ 
   familyUuid,
   householdSize,
-  membersAdded,
+  savedCount,
+  currentIndex,
+  editingMember,
   headData,
-  onMemberAdded,
+  onMemberSaved,
   onNext, 
   onBack,
   isLoading, 
@@ -924,16 +944,23 @@ function Step2Members({
 }: { 
   familyUuid: string
   householdSize: number
-  membersAdded: number
+  savedCount: number
+  currentIndex: number
+  editingMember: MemberData | null
   headData: { first_name: string; last_name: string; national_id: string; phone?: string; email?: string } | null
-  onMemberAdded: (member: MemberData) => void
+  onMemberSaved: (member: MemberData, wasUpdate: boolean) => void
   onNext: () => void
   onBack: () => void
   isLoading: boolean
   error: string | null
 }) {
-  const isFirstMember = membersAdded === 0
-  const [formData, setFormData] = useState<MemberData>({
+  const isFirstMember = currentIndex === 0
+  const isEditing = editingMember != null
+  const [formData, setFormData] = useState<MemberData>(() => {
+    // Pre-populate when editing an existing member (navigated back)
+    if (editingMember) return { ...editingMember }
+    // Fresh form for first member — seed name/id from family head data
+    return {
     first_name: isFirstMember && headData ? headData.first_name : '',
     last_name: isFirstMember && headData ? headData.last_name : '',
     national_id: isFirstMember && headData ? headData.national_id : '',
@@ -986,11 +1013,11 @@ function Step2Members({
     reg_doc_other: false,
     reg_doc_other_specify: '',
     sex_code: '',
-  })
+  }})
 
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
   const [showExtended, setShowExtended] = useState(false)
-  const remaining = householdSize - membersAdded
+  const remaining = householdSize - savedCount
 
   const validateNationalId = (nid: string): boolean => {
     if (!nid) return true
@@ -1081,67 +1108,18 @@ function Step2Members({
       sex_code: formData.sex_code || null,
     }
     
-    const result = await apiCall<{ uuid: string; member_id: string }>(`/family/${familyUuid}/members`, 'POST', memberPayload)
+    const result = isEditing && editingMember?.uuid
+      ? await apiCall(`/family/${familyUuid}/members/${editingMember.uuid}`, 'PUT', memberPayload)
+      : await apiCall<{ uuid: string; member_id: string }>(`/family/${familyUuid}/members`, 'POST', memberPayload)
 
     if (result.success && result.data) {
       const memberResult = result.data as { uuid: string; member_id: string }
-      // Immediately pass member data back — no docs phase
-      const memberData = { ...formData, member_id: memberResult.member_id, uuid: memberResult.uuid }
-      onMemberAdded(memberData)
-
-      // Reset for next member
-      const newMemberCount = membersAdded + 1
-      if (newMemberCount < householdSize) {
-        setFormData({
-          first_name: '',
-          last_name: '',
-          national_id: '',
-          date_of_birth: '',
-          gender: undefined,
-          relationship_to_head: '',
-          marital_status: '',
-          alive_flag: true,
-          use_family_address: false,
-          phone: '',
-          email: '',
-          current_address: { line1: '', line2: '', parish: '', district: '' },
-          middle_names: '',
-          alias: '',
-          trn: '',
-          nis_no: '',
-          id_type: '',
-          id_number: '',
-          birth_entry_number: '',
-          mothers_maiden_name: '',
-          is_twin: false,
-          order_number: undefined,
-          occupation: '',
-          contact_no_1: '',
-          contact_no_2: '',
-          union_status: '',
-          last_school_completed: '',
-          school_name: '',
-          school_parish: '',
-          school_attended_since: '',
-          pregnant: '',
-          pregnancy_due_date: '',
-          health_condition_disability: false,
-          health_visual_impairment: false,
-          health_hiv_aids: false,
-          health_other: false,
-          health_other_specify: '',
-          pension_number: '',
-          clinic_name: '',
-          clinic_parish: '',
-          clinic_number: '',
-          reg_doc_birth_certificate: false,
-          reg_doc_id: false,
-          reg_doc_other: false,
-          reg_doc_other_specify: '',
-          sex_code: '',
-        })
-        setValidationErrors({})
+      const memberData: MemberData = {
+        ...formData,
+        member_id: memberResult.member_id ?? editingMember?.member_id,
+        uuid: memberResult.uuid ?? editingMember?.uuid,
       }
+      onMemberSaved(memberData, isEditing)
     }
   }
 
@@ -1152,21 +1130,21 @@ function Step2Members({
           Step 2: Family Members
         </h2>
         <p className="text-gray-600 dark:text-gray-400 mt-2">
-          Adding member {membersAdded + 1} of {householdSize}
+          {isEditing ? `Editing member ${currentIndex + 1} of ${householdSize}` : `Adding member ${currentIndex + 1} of ${householdSize}`}
         </p>
         <div className="flex items-center justify-center gap-2 mt-3">
           {Array.from({ length: householdSize }).map((_, i) => (
             <div
               key={i}
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                i < membersAdded
+                i < savedCount && i !== currentIndex
                   ? 'bg-green-500 text-white'
-                  : i === membersAdded
+                  : i === currentIndex
                   ? 'bg-primary text-white'
                   : 'bg-gray-200 dark:bg-gray-700 text-gray-500'
               }`}
             >
-              {i < membersAdded ? '✓' : i + 1}
+              {i < savedCount && i !== currentIndex ? '✓' : i + 1}
             </div>
           ))}
         </div>
@@ -1369,7 +1347,7 @@ function Step2Members({
           >
             <span className="flex items-center gap-2">
               <span className="material-symbols-outlined text-base">tune</span>
-              Additional Details (Jamaica Form Fields)
+              Additional Details
             </span>
             <span className="material-symbols-outlined text-base">
               {showExtended ? 'expand_less' : 'expand_more'}
@@ -1693,7 +1671,7 @@ function Step2Members({
           </button>
         </div>
 
-        {membersAdded === householdSize && (
+        {savedCount === householdSize && (
           <button
             type="button"
             onClick={onNext}
@@ -1703,14 +1681,19 @@ function Step2Members({
           </button>
         )}
 
-        {membersAdded > 0 && membersAdded < householdSize && (
-          <button
-            type="button"
-            onClick={onNext}
-            className="w-full py-3 px-4 border border-amber-500 text-amber-700 dark:text-amber-400 rounded-lg font-medium text-sm"
-          >
-            Skip remaining members — Continue with {membersAdded} member{membersAdded > 1 ? 's' : ''} (household size will be updated)
-          </button>
+        {savedCount > 0 && savedCount < householdSize && (
+          <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm">
+            <p className="font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1">
+              <span className="material-symbols-outlined text-base">warning</span>
+              {householdSize - savedCount} more member{householdSize - savedCount > 1 ? 's' : ''} still needed
+            </p>
+            <p className="text-amber-700 dark:text-amber-400 mt-1">
+              You must add all {householdSize} members before you can submit. To reduce the count,{' '}
+              <button type="button" onClick={onBack} className="underline font-semibold hover:text-amber-900">
+                go back to Step 1
+              </button>{' '}and change the household size.
+            </p>
+          </div>
         )}
       </form>
     </div>
@@ -2367,6 +2350,61 @@ export default function RegistrationWizard() {
     setLoading(true)
     setError(null)
 
+    // If family already exists (user went back from Step 2), UPDATE instead of create
+    let existingUuid: string | null = null
+    setState(prev => { existingUuid = prev.familyUuid; return prev })
+
+    if (existingUuid) {
+      const familyResult = await apiCall<FamilyData>(`/family/${existingUuid}`, 'PUT', {
+        household_size: data.household_size,
+        head_first_name: data.head_first_name,
+        head_last_name: data.head_last_name,
+        phone: data.phone || null,
+        email: data.email || null,
+        vulnerability_flag: data.vulnerability_flag || false,
+        programme: data.programme || null,
+        payment_option: data.payment_option || null,
+        social_worker_zone: data.social_worker_zone || null,
+        social_worker_code: data.social_worker_code || null,
+        head_middle_names: data.head_middle_names || null,
+        head_alias: data.head_alias || null,
+        head_mothers_maiden_name: data.head_mothers_maiden_name || null,
+        mailing_address_different: data.mailing_address_different || false,
+        directions_to_house: data.directions_to_house || null,
+      })
+      if (!familyResult.success) {
+        setError(familyResult.error || 'Failed to update family')
+        setLoading(false)
+        return
+      }
+      await apiCall<AddressData>(`/family/${existingUuid}/address`, 'PUT', {
+        line1: data.address.line1,
+        line2: data.address.line2,
+        parish: data.address.parish,
+        district: data.address.district,
+        geo_code: data.address.geo_code,
+        lot_apt: data.address.lot_apt || null,
+        street_district: data.address.street_district || null,
+        post_office: data.address.post_office || null,
+        post_code: data.address.post_code || null,
+        area_type: data.address.area_type || null,
+      })
+      setState(prev => ({
+        ...prev,
+        family: familyResult.data!,
+        headData: {
+          first_name: data.head_first_name,
+          last_name: data.head_last_name,
+          national_id: data.head_national_id,
+          phone: data.phone,
+          email: data.email,
+        },
+        currentStep: 2,
+        isLoading: false,
+      }))
+      return
+    }
+
     const familyResult = await apiCall<FamilyData>('/family', 'POST', {
       household_size: data.household_size,
       intake_channel: data.intake_channel,
@@ -2448,15 +2486,22 @@ export default function RegistrationWizard() {
     }))
   }, [])
 
-  // Step 2: Member Added → loop or advance to Step 3 (Docs)
-  const handleMemberAdded = useCallback((member: MemberData) => {
+  // Step 2: Member saved (new or updated) → loop or advance to Step 3
+  const handleMemberSaved = useCallback((member: MemberData, wasUpdate: boolean) => {
     setState(prev => {
-      const newMembers = [...prev.members, member]
-      const allAdded = newMembers.length >= (prev.family?.household_size || 1)
+      const newMembers = [...prev.members]
+      if (wasUpdate) {
+        newMembers[prev.currentMemberIndex] = member
+      } else {
+        newMembers.push(member)
+      }
+      const nextIndex = prev.currentMemberIndex + 1
+      const allAdded = nextIndex >= (prev.family?.household_size || 1)
       return {
         ...prev,
         members: newMembers,
-        currentStep: allAdded ? 3 : 2, // Go to docs step when all added
+        currentMemberIndex: nextIndex,
+        currentStep: allAdded ? 3 : 2,
         error: null,
       }
     })
@@ -2561,6 +2606,8 @@ export default function RegistrationWizard() {
               {state.currentStep === 1 && (
                 <Step1FamilyAndAddress
                   onNext={handleCreateFamily}
+                  onBack={() => navigate(isEditMode ? '/family' : '/')}
+                  initialData={state.family ? { family: state.family, address: state.address } : undefined}
                   isLoading={state.isLoading}
                   error={state.error}
                 />
@@ -2568,13 +2615,22 @@ export default function RegistrationWizard() {
 
               {state.currentStep === 2 && state.familyUuid && state.family && (
                 <Step2Members
+                  key={state.currentMemberIndex}
                   familyUuid={state.familyUuid}
                   householdSize={state.family.household_size}
-                  membersAdded={state.members.length}
+                  savedCount={state.members.length}
+                  currentIndex={state.currentMemberIndex}
+                  editingMember={state.members[state.currentMemberIndex] ?? null}
                   headData={state.headData}
-                  onMemberAdded={handleMemberAdded}
+                  onMemberSaved={handleMemberSaved}
                   onNext={() => goToStep(3)}
-                  onBack={() => goToStep(1)}
+                  onBack={() => {
+                    if (state.currentMemberIndex > 0) {
+                      setState(prev => ({ ...prev, currentMemberIndex: prev.currentMemberIndex - 1 }))
+                    } else {
+                      goToStep(1)
+                    }
+                  }}
                   isLoading={state.isLoading}
                   error={state.error}
                 />

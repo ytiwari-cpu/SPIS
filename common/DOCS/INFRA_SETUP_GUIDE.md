@@ -403,7 +403,7 @@ echo "✅ Keycloak: http://localhost:8080/auth"
 echo "✅ RabbitMQ: CloudAMQP (check dashboard)"
 echo ""
 echo "Next steps:"
-echo "1. Configure Keycloak realm (see INFRASTRUCTURE_SETUP.md)"
+echo "1. Configure Keycloak realm (see INFRA_SETUP_GUIDE.md)"
 echo "2. Run migrations: npm run migrate"
 echo "3. Start services: npm run dev"
 ```

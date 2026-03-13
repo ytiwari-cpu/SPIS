@@ -323,7 +323,7 @@ email-service/
 ├── Dockerfile
 ├── package.json
 ├── tsconfig.json
-├── ARCHITECTURE.md          ← this file
+├── EMAIL_ARCHITECTURE_RUNBOOK.md  ← this file
 └── src/
     ├── index.ts             — Express API entry point
     ├── worker.ts            — Queue worker entry point

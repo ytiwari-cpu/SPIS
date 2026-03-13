@@ -13,6 +13,7 @@ import { logger } from '../../lib/logger.js'
 import { generateOtp, hashOtp, verifyOtp, hashNationalId } from '../../lib/crypto.js'
 import { sendOtpEmail } from '../../lib/emailClient.js'
 import { lookupByNationalId } from '../../lib/registryClient.js'
+import { getKeycloakUserByUsername, updateKeycloakPassword, createKeycloakUser } from '../../lib/keycloak.js'
 import { OtpLoginRepository } from './otpLoginRepository.js'
 
 export class OtpLoginService extends BaseService {
@@ -155,5 +156,39 @@ export class OtpLoginService extends BaseService {
       registry_id:  user.registry_id || null,
       is_new_user:  isNewUser,
     }
+  }
+
+  /**
+   * Set initial password for a user who logged in via OTP for the first time.
+   * Finds their Keycloak account (by national_id as username) and sets the
+   * chosen password, replacing the random temp password created at OTP verify time.
+   */
+  async setInitialPassword(nationalId, newPassword) {
+    const nationalIdHash = hashNationalId(nationalId)
+    const user = await this.repo.findByNationalIdHash(nationalIdHash)
+    if (!user) {
+      throw Object.assign(new Error('User not found'), { statusCode: 404 })
+    }
+
+    // Ensure Keycloak account exists — it should have been created at OTP verify
+    const kcUser = await getKeycloakUserByUsername(nationalId)
+    if (kcUser) {
+      await updateKeycloakPassword(kcUser.id, newPassword)
+      logger.info('Updated Keycloak password via setInitialPassword', { user_id: user.user_id })
+    } else {
+      // Safety net: create the account now with the desired password
+      await createKeycloakUser({
+        username:      nationalId,
+        email:         user.email,
+        firstName:     '',
+        lastName:      '',
+        password:      newPassword,
+        enabled:       true,
+        emailVerified: true,
+      })
+      logger.info('Created Keycloak account during setInitialPassword', { user_id: user.user_id })
+    }
+
+    return { success: true, message: 'Password set successfully' }
   }
 }

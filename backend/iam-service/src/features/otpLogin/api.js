@@ -24,8 +24,14 @@ const verify = {
   middleware: [rateLimiters.passwordResetConfirm],
 }
 
+const setPassword = {
+  path:    '/set-initial-password',
+  verb:    'POST',
+  handler: { controller: OtpLoginController, method: 'setPassword' },
+}
+
 export const OtpLoginApi = new ApiSchema({
   name:      'OtpLogin',
   url:       '/iam/otp-login',
-  endpoints: [request, verify],
+  endpoints: [request, verify, setPassword],
 })

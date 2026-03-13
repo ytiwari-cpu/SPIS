@@ -372,7 +372,7 @@ iam-service/
 ├── Dockerfile
 ├── package.json
 ├── tsconfig.json
-├── ARCHITECTURE.md             ← this file
+├── IAM_ARCHITECTURE_RUNBOOK.md  ← this file
 └── src/
     ├── index.ts                — Express API entry point
     ├── worker.ts               — Event worker entry point

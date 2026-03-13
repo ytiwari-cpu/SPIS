@@ -65,4 +65,12 @@ export class AuthController {
   async logout() {
     return this.res.json({ success: true, message: 'Logged out successfully' })
   }
+
+  async setInitialPassword() {
+    const { req, res } = this
+    const { new_password } = req.body
+    if (!new_password) return res.status(400).json({ success: false, error: 'new_password is required' })
+    const { status, json } = await this.service.proxySetInitialPassword(new_password, req.headers.authorization)
+    return res.status(status).json(json)
+  }
 }

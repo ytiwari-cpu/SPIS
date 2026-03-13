@@ -17,6 +17,7 @@ interface AuthState {
   headMember: DbFamilyMember | null
   isLoading: boolean
   error: string | null
+  needsPasswordSetup: boolean
 
   // Actions
   login: (session: AuthSession) => void
@@ -25,6 +26,7 @@ interface AuthState {
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
   clearError: () => void
+  setNeedsPasswordSetup: (value: boolean) => void
   hasPermission: (permission: string) => boolean
   hasExplicitPermission: (permission: string) => boolean
   hasRole: (role: string) => boolean
@@ -43,6 +45,7 @@ export const useAuthStore = create<AuthState>()(
       headMember: null,
       isLoading: false,
       error: null,
+      needsPasswordSetup: false,
       user: null,
 
       // Login with session from API
@@ -92,6 +95,7 @@ export const useAuthStore = create<AuthState>()(
       setLoading: (loading) => set({ isLoading: loading }),
       setError: (error) => set({ error, isLoading: false }),
       clearError: () => set({ error: null }),
+      setNeedsPasswordSetup: (value) => set({ needsPasswordSetup: value }),
 
       // Permission & role checks
       hasPermission: (permission: string): boolean => {
@@ -147,6 +151,7 @@ export const useAuthStore = create<AuthState>()(
         isAuthenticated: state.isAuthenticated,
         session: state.session,
         user: state.user,
+        needsPasswordSetup: state.needsPasswordSetup,
       }),
     }
   )

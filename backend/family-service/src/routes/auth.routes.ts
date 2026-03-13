@@ -479,4 +479,31 @@ router.post('/logout', async (_req: Request, res: Response) => {
   })
 })
 
+/**
+ * POST /api/v1/auth/set-initial-password
+ *
+ * Proxy to IAM service. Called by newly-onboarded citizens (who registered via OTP
+ * and are setting their password for the first time through the forced modal).
+ * The IAM service extracts the national_id from the Bearer JWT, looks up the
+ * Keycloak account, and sets the chosen password.
+ */
+router.post('/set-initial-password', async (req: Request, res: Response) => {
+  try {
+    const iamResponse = await fetch(`${IAM_SERVICE_URL}/iam/otp-login/set-initial-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // Forward the citizen's Bearer token so IAM can read their national_id claim
+        ...(req.headers.authorization ? { Authorization: req.headers.authorization } : {}),
+      },
+      body: JSON.stringify(req.body),
+    })
+    const json = await iamResponse.json()
+    return res.status(iamResponse.status).json(json)
+  } catch (error) {
+    console.error('set-initial-password proxy error:', error)
+    return res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
 export { router as authRouter }
