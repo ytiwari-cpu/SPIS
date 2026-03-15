@@ -161,11 +161,12 @@ export default function AdminRolesContent() {
     if (!deletingRole) return
     
     const roleName = deletingRole.role_name
+    const roleId = deletingRole.role_id
     
     setIsDeleting(true)
     
     try {
-      await rbacApi.deleteRole(roleName)
+      await rbacApi.deleteRole(roleId)
       setShowDeleteConfirm(false)
       setDeletingRole(null)
       toast.success(`Role "${roleName}" deactivated`)
@@ -187,10 +188,11 @@ export default function AdminRolesContent() {
     if (!deletingRole) return
     
     const roleName = deletingRole.role_name
+    const roleId = deletingRole.role_id
     setIsDeleting(true)
     
     try {
-      await rbacApi.permanentlyDeleteRole(roleName)
+      await rbacApi.permanentlyDeleteRole(roleId)
       // Close modal only on success
       setShowPermanentDeleteConfirm(false)
       setDeletingRole(null)

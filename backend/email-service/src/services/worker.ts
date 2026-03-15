@@ -81,12 +81,12 @@ async function handleFailure(msg: EmailSendMessage, error: string): Promise<void
   const maxAttempts = config.maxSendAttempts
   const isFinal = attempt >= maxAttempts
 
-  await updateEmailStatus(request_id, isFinal ? 'failed' : 'queued', {
-    last_error: error,
-  })
-
   if (isFinal) {
-    // Max attempts reached — publish email.failed
+    // Max attempts reached — mark as permanently failed
+    await updateEmailStatus(request_id, 'failed', {
+      last_error: error,
+    })
+
     publishEmailFailed({
       request_id,
       to_email,
@@ -98,27 +98,84 @@ async function handleFailure(msg: EmailSendMessage, error: string): Promise<void
 
     logger.error('Email permanently failed', { request_id, to_email, attempts: attempt, error })
   } else {
-    // Schedule retry with exponential backoff
+    // Durable retry: mark as failed with retry info in last_error
+    // The sweep will pick it up based on attempts < max and time elapsed
     const delayMs = config.retryBaseDelayMs * Math.pow(2, attempt - 1)
+    const retryAfter = new Date(Date.now() + delayMs).toISOString()
 
-    logger.warn('Email send failed, scheduling retry', {
+    await updateEmailStatus(request_id, 'failed', {
+      last_error: `RETRY_AFTER:${retryAfter}|${error}`,
+    })
+
+    logger.warn('Email send failed, scheduled durable retry', {
       request_id,
       attempt,
       nextAttempt: attempt + 1,
-      delayMs,
+      retryAfter,
+    })
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RETRY SWEEP — polls DB every 30s for retry_pending rows
+// ═══════════════════════════════════════════════════════════════
+
+const SWEEP_INTERVAL_MS = 30_000
+
+async function sweepRetryPending(): Promise<void> {
+  try {
+    const maxAttempts = config.maxSendAttempts
+    const result = await pool.query(
+      `SELECT request_id, to_email, template_code, payload_json, attempts, last_error
+       FROM email_requests
+       WHERE status = 'failed'
+         AND attempts < $1
+         AND last_error LIKE 'RETRY_AFTER:%'
+       ORDER BY created_at ASC
+       LIMIT 50`,
+      [maxAttempts]
+    )
+    const rows = result.rows as Array<{
+      request_id: string
+      to_email: string
+      template_code: string
+      payload_json: Record<string, unknown>
+      attempts: number
+      last_error: string | null
+    }>
+
+    if (rows.length === 0) return
+
+    // Filter by retry time (encoded in last_error as RETRY_AFTER:<iso>|<msg>)
+    const now = Date.now()
+    const ready = rows.filter(row => {
+      const match = row.last_error?.match(/^RETRY_AFTER:([^|]+)/)
+      if (!match) return false
+      const retryAt = new Date(match[1]).getTime()
+      return now >= retryAt
     })
 
-    setTimeout(() => {
-      // Re-publish with incremented attempt
+    if (ready.length === 0) return
+
+    logger.info('Retry sweep found pending emails', { count: ready.length })
+
+    for (const row of ready) {
+      // Mark as queued to prevent re-pickup
+      await updateEmailStatus(row.request_id, 'queued')
+
+      // Re-publish to the queue with incremented attempt
       publishEmailSend({
-        request_id,
-        to_email: msg.to_email,
-        template_code: msg.template_code,
-        variables: msg.variables,
-        locale: msg.locale,
-        attempt: attempt + 1,
+        request_id:    row.request_id,
+        to_email:      row.to_email,
+        template_code: row.template_code,
+        variables:     (row.payload_json as Record<string, unknown>) || {},
+        locale:        (row.payload_json as Record<string, unknown>)?.locale as string || 'en',
+        attempt:       (row.attempts || 0) + 1,
       })
-    }, delayMs)
+    }
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : 'unknown'
+    logger.error('Retry sweep error', { error: errMsg })
   }
 }
 
@@ -131,6 +188,10 @@ export async function startWorker(): Promise<void> {
 
   await connectBus()
   await consume(QUEUES.send, processMessage)
+
+  // Start durable retry sweep
+  setInterval(sweepRetryPending, SWEEP_INTERVAL_MS)
+  logger.info('Retry sweep started', { intervalMs: SWEEP_INTERVAL_MS })
 
   logger.info('Email worker is running', {
     queue: QUEUES.send,

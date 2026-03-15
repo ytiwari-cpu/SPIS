@@ -8,6 +8,8 @@
  */
 import { supabase, familySupabase } from '../lib/supabase.js'
 import { createVariable } from './variableCatalog.js'
+import { ApplicationError } from '../../../base/applicationError.js'
+import { sanitizeIdentifier } from '../../../base/queryHelper.js'
 import type { CustomFieldDefinition } from '../types/index.js'
 
 // Map our data types to PostgreSQL column types
@@ -18,6 +20,10 @@ const PG_TYPE_MAP: Record<string, string> = {
     date: 'DATE',
     enum: 'VARCHAR(100)',
 }
+
+// Whitelist of tables that can have custom fields added.
+// Never allow ALTER TABLE on system tables (users, audit_logs, etc.)
+const ALLOWED_TARGET_TABLES = ['family', 'family_member', 'house_services', 'address']
 
 /**
  * Creates a custom field:
@@ -38,16 +44,34 @@ export async function createCustomField(
     },
     createdBy?: string,
 ): Promise<CustomFieldDefinition> {
-    // Generate safe column name
-    const fieldName = `custom_${input.display_name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`
+    // VALIDATE target_table against whitelist
+    if (!ALLOWED_TARGET_TABLES.includes(input.target_table)) {
+        throw ApplicationError.badRequest(
+            `Invalid target table: ${input.target_table}. Allowed: ${ALLOWED_TARGET_TABLES.join(', ')}`,
+        )
+    }
+
+    // VALIDATE data_type against the type map
+    const pgType = PG_TYPE_MAP[input.data_type]
+    if (!pgType) {
+        throw ApplicationError.badRequest(
+            `Invalid data type: ${input.data_type}. Allowed: ${Object.keys(PG_TYPE_MAP).join(', ')}`,
+        )
+    }
+
+    // Generate safe column name and apply sanitizeIdentifier
+    const rawFieldName = `custom_${input.display_name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`
+    const fieldName = sanitizeIdentifier(rawFieldName)
+    if (!fieldName) {
+        throw ApplicationError.badRequest('Display name produces an invalid column name')
+    }
+
     const variableCode = `${input.target_table}.${fieldName}`
-    const pgType = PG_TYPE_MAP[input.data_type] || 'VARCHAR(255)'
 
     // Step 1: ALTER TABLE on family DB
     if (familySupabase) {
-        // Use Supabase RPC to run raw SQL — or fall back to noting the alteration is needed
-        const schemaPrefix = input.target_table === 'house_services' ? 'family' : 'family'
-        const alterSQL = `ALTER TABLE ${schemaPrefix}.${input.target_table} ADD COLUMN IF NOT EXISTS ${fieldName} ${pgType};`
+        const safeTable = sanitizeIdentifier(input.target_table)
+        const alterSQL = `ALTER TABLE family.${safeTable} ADD COLUMN IF NOT EXISTS ${fieldName} ${pgType};`
 
         try {
             const { error } = await familySupabase.rpc('exec_sql', { sql: alterSQL })

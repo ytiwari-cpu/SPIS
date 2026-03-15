@@ -13,7 +13,10 @@ const logger = createLogger('iam-service')
 const client = axios.create({
   baseURL: config.emailServiceUrl,
   timeout: 10000,
-  headers: { 'Content-Type': 'application/json' },
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Service-Key': process.env.SERVICE_AUTH_KEY || '',
+  },
 })
 
 /**

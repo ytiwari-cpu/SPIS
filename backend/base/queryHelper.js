@@ -1,118 +1,148 @@
 /**
  * backend/base/queryHelper.js
  *
- * Chainable SQL query builder for pg Pool.
+ * Single-use chainable SQL query builder.
  *
- * Provides a fluent API to build SELECT, INSERT, UPDATE, DELETE queries
- * without raw SQL strings scattered through repositories.
+ * Every instance represents ONE query. Build it, call .toParam(), pass to this.runQuery().
+ * Never reuse an instance across multiple queries.
  *
  * Usage:
- *   import { QueryHelper } from '../../../../base/queryHelper.js'
  *
- *   const qh = new QueryHelper(pool)
- *
- *   // SELECT with filters, pagination, ordering
- *   const families = await qh
- *     .table('family.family')
- *     .select('family_id, family_name, status')
- *     .where('status', '=', 'Active')
- *     .where('parish', '=', 'Kingston')
+ *   // SELECT — returns rows[]
+ *   const { text, values } = new QueryHelper('family')
+ *     .select('*')
+ *     .where('status', '=', 'active')
  *     .orderBy('created_at', 'DESC')
  *     .limit(20)
- *     .offset(0)
- *     .execute()
+ *     .toParam()
+ *   return this.runQuery(text, values, true)
  *
- *   // SELECT ONE
- *   const family = await qh
- *     .table('family.family')
+ *   // SELECT one row
+ *   const { text, values } = new QueryHelper('family')
  *     .select('*')
- *     .where('family_id', '=', familyId)
- *     .executeOne()
+ *     .where('uuid', '=', uuid)
+ *     .toParam()
+ *   const rows = await this.runQuery(text, values, true)
+ *   return rows[0] ?? null
  *
- *   // INSERT
- *   const newRow = await qh
- *     .table('family.family_member')
- *     .insert({ first_name: 'John', last_name: 'Doe', family_id: '...' })
- *     .returning('*')
- *     .executeOne()
+ *   // SELECT with alias + named fields + LEFT JOIN
+ *   const { text, values } = new QueryHelper('programme_rules')
+ *     .select('pr')
+ *     .field('pr.rule_code',  'ruleCode')
+ *     .field('rm.rule_name',  'ruleName')
+ *     .left_join('rule_master', 'rm', 'rm.rule_code = pr.rule_code')
+ *     .where('pr.programme_id', '=', programmeId)
+ *     .orderBy('pr.created_at')
+ *     .toParam()
+ *   return this.runQuery(text, values, true)
+ *
+ *   // INSERT (void write)
+ *   const { text, values } = new QueryHelper('family_member')
+ *     .insert({ first_name: 'John', family_id: '...' })
+ *     .toParam()
+ *   await this.runQuery(text, values, false)
  *
  *   // UPDATE
- *   const updated = await qh
- *     .table('family.family')
- *     .update({ status: 'Submitted' })
- *     .where('family_id', '=', familyId)
- *     .returning('*')
- *     .executeOne()
+ *   const { text, values } = new QueryHelper('family')
+ *     .update({ status: 'submitted' })
+ *     .where('uuid', '=', uuid)
+ *     .toParam()
+ *   await this.runQuery(text, values, false)
  *
  *   // DELETE
- *   const count = await qh
- *     .table('family.family_member')
+ *   const { text, values } = new QueryHelper('family_member')
  *     .delete()
- *     .where('member_id', '=', memberId)
- *     .executeCount()
+ *     .where('uuid', '=', memberId)
+ *     .toParam()
+ *   await this.runQuery(text, values, false)
  *
  *   // COUNT
- *   const total = await qh
- *     .table('family.family')
+ *   const { text, values } = new QueryHelper('family')
  *     .count()
- *     .where('status', '=', 'Active')
- *     .executeValue()
- *
- *   // Pagination helper
- *   const page = await qh
- *     .table('family.family')
- *     .select('*')
- *     .where('status', '=', 'Active')
- *     .paginate({ page: 1, pageSize: 20 })
- *   // → { data: [...], total: 42, page: 1, pageSize: 20, totalPages: 3 }
+ *     .where('status', '=', 'active')
+ *     .toParam()
+ *   const rows = await this.runQuery(text, values, true)
+ *   return parseInt(rows[0]?.count ?? '0', 10)
  */
 
 export class QueryHelper {
   /**
-   * @param {import('pg').Pool} pool
+   * @param {string} tableName — the table this builder targets (e.g. 'family', 'iam.users')
    */
-  constructor(pool) {
-    this._pool       = pool
-    this._table      = null
-    this._operation  = 'SELECT'  // SELECT | INSERT | UPDATE | DELETE
-    this._columns    = '*'
-    this._conditions = []        // { column, operator, value, conjunction }
+  constructor(tableName) {
+    this._pool  = null          // legacy pool — unused in builder-only mode
+    this._table = tableName
+
+    // Initialise all query state — every instance is single-use; no reset method needed
+    this._operation    = 'SELECT'
+    this._columns      = '*'
+    this._conditions   = []
     this._orConditions = []
-    this._params     = []
+    this._params       = []
     this._orderClauses = []
-    this._limitVal   = null
-    this._offsetVal  = null
-    this._returning  = null
-    this._insertData = null
-    this._updateData = null
-    this._joins      = []
-    this._groupBy    = null
-    this._having     = null
-    this._isCount    = false
-    this._raw        = null      // raw SQL override
+    this._limitVal     = null
+    this._offsetVal    = null
+    this._returning    = null
+    this._insertData   = null
+    this._updateData   = null
+    this._joins        = []
+    this._tableAlias   = null
+    this._fields       = []
+    this._groupBy      = null
+    this._having       = null
+    this._isCount      = false
   }
 
   // ─── FLUENT STARTERS ──────────────────────────────────────────
 
   /**
-   * Set the target table. Returns a fresh builder (to support reuse of the pool).
-   * @param {string} tableName — e.g. 'family.family', 'iam.users', 'public.audit_logs'
+   * Set the target table. Returns a fresh builder.
+   * @param {string} tableName
    * @returns {QueryHelper}
    */
   table(tableName) {
-    const qh = new QueryHelper(this._pool)
-    qh._table = tableName
-    return qh
+    return new QueryHelper(tableName)
   }
 
   /**
-   * SELECT columns
-   * @param {string} columns — e.g. '*', 'id, name', 'family_id AS fid'
+   * SELECT columns — or set the main table alias when called with a single identifier.
+   *
+   * Two calling conventions:
+   *   .select('*')                      — select all columns (default)
+   *   .select('f_id, name, status')     — select named columns
+   *   .select('br')                     — set main table alias; columns built via .field() calls
+   *
+   * When called with a bare identifier (letters/digits/underscores only) it is treated as a
+   * table alias: the FROM clause becomes `tableName alias` and columns are accumulated via .field().
+   *
+   * @param {string} columnsOrAlias
    * @returns {QueryHelper}
    */
-  select(columns = '*') {
+  select(columnsOrAlias = '*') {
     this._operation = 'SELECT'
-    this._columns = columns
+    // Bare single identifier → treat as table alias; columns will be built by .field() calls
+    if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(columnsOrAlias)) {
+      this._tableAlias = columnsOrAlias
+      this._fields     = []     // accumulate via .field()
+      this._columns    = null   // will be derived from _fields at build time
+    } else {
+      this._columns = columnsOrAlias
+    }
+    return this
+  }
+
+  /**
+   * Add a single field to the SELECT list.
+   * Must be used after .select('tableAlias') — incompatible with .select('col1, col2').
+   *
+   * @param {string} expression — e.g. 'br.Frequency', 'COUNT(*)', 'row_to_json(pm.*)'
+   * @param {string} [alias]    — e.g. 'businessRuleFrequency'
+   * @returns {QueryHelper}
+   */
+  field(expression, alias) {
+    const fieldStr = alias ? `${expression} AS ${alias}` : expression
+    this._fields.push(fieldStr)
+    this._columns = null   // will be derived from _fields at build time
     return this
   }
 
@@ -123,8 +153,8 @@ export class QueryHelper {
    */
   count(column = '*') {
     this._operation = 'SELECT'
-    this._columns = `COUNT(${column})`
-    this._isCount = true
+    this._columns   = `COUNT(${column})`
+    this._isCount   = true
     return this
   }
 
@@ -164,7 +194,8 @@ export class QueryHelper {
   /**
    * Add a WHERE condition (AND).
    * @param {string} column
-   * @param {string} operator — '=', '!=', '>', '<', '>=', '<=', 'IN', 'NOT IN', 'LIKE', 'ILIKE', 'IS', 'IS NOT', 'BETWEEN'
+   * @param {string} operator — '=', '!=', '>', '<', '>=', '<=',
+   *   'IN', 'NOT IN', 'LIKE', 'ILIKE', 'IS', 'IS NOT', 'BETWEEN'
    * @param {unknown} value
    * @returns {QueryHelper}
    */
@@ -231,24 +262,43 @@ export class QueryHelper {
   // ─── JOINS ────────────────────────────────────────────────────
 
   /**
-   * INNER JOIN
-   * @param {string} table
-   * @param {string} on — e.g. 'family.family_id = family_member.family_id'
+   * INNER JOIN — supports both 2-arg and 3-arg forms:
+   *
+   *   2-arg: .join('other_table',        'other_table.id = main.other_id')
+   *   3-arg: .join('other_table', 'ot',  'ot.id = br.other_id')
+   *            └─ table name      └─ alias  └─ ON condition
+   *
+   * @param {string} table       — e.g. 'family_member'
+   * @param {string} aliasOrOn   — table alias (3-arg) or ON condition (2-arg)
+   * @param {string} [on]        — ON condition (3-arg only)
    * @returns {QueryHelper}
    */
-  join(table, on) {
-    this._joins.push({ type: 'INNER JOIN', table, on })
+  join(table, aliasOrOn, on) {
+    if (on !== undefined) {
+      this._joins.push({ type: 'INNER JOIN', table: `${table} ${aliasOrOn}`, on })
+    } else {
+      this._joins.push({ type: 'INNER JOIN', table, on: aliasOrOn })
+    }
     return this
   }
 
   /**
-   * LEFT JOIN
+   * LEFT JOIN — supports both 2-arg and 3-arg forms (same signature as join()).
+   *
+   *   2-arg: .left_join('other_table',        'other_table.id = main.other_id')
+   *   3-arg: .left_join('other_table', 'ot',  'ot.id = br.other_id')
+   *
    * @param {string} table
-   * @param {string} on
+   * @param {string} aliasOrOn
+   * @param {string} [on]
    * @returns {QueryHelper}
    */
-  leftJoin(table, on) {
-    this._joins.push({ type: 'LEFT JOIN', table, on })
+  left_join(table, aliasOrOn, on) {
+    if (on !== undefined) {
+      this._joins.push({ type: 'LEFT JOIN', table: `${table} ${aliasOrOn}`, on })
+    } else {
+      this._joins.push({ type: 'LEFT JOIN', table, on: aliasOrOn })
+    }
     return this
   }
 
@@ -261,7 +311,25 @@ export class QueryHelper {
    * @returns {QueryHelper}
    */
   orderBy(column, direction = 'ASC') {
-    this._orderClauses.push(`${column} ${direction.toUpperCase()}`)
+    const col = typeof column === 'string' ? column.replace(/[^a-zA-Z0-9_.]/g, '') : null
+    if (!col) {
+      throw new Error(`QueryHelper.orderBy: invalid column name "${column}"`)
+    }
+    const dir = String(direction).toUpperCase() === 'ASC' ? 'ASC' : 'DESC'
+    this._orderClauses.push(`${col} ${dir}`)
+    return this
+  }
+
+  /**
+   * ORDER BY with a raw expression (e.g. CASE WHEN ...).
+   * Unlike orderBy(), this does NOT sanitize the expression — use only for
+   * known-safe, hard-coded ordering expressions.
+   *
+   * @param {string} expression — verbatim SQL expression
+   * @returns {QueryHelper}
+   */
+  orderByExpr(expression) {
+    this._orderClauses.push(expression)
     return this
   }
 
@@ -291,7 +359,14 @@ export class QueryHelper {
    * @returns {QueryHelper}
    */
   groupBy(columns) {
-    this._groupBy = columns
+    const safe = columns.split(',').map(c => {
+      const s = c.trim().replace(/[^a-zA-Z0-9_.]/g, '')
+      return s || null
+    }).filter(Boolean).join(', ')
+    if (!safe) {
+      throw new Error(`QueryHelper.groupBy: invalid column(s) "${columns}"`)
+    }
+    this._groupBy = safe
     return this
   }
 
@@ -315,32 +390,16 @@ export class QueryHelper {
     return this
   }
 
-  // ─── RAW SQL ──────────────────────────────────────────────────
+  // ─── BUILD / FINALIZE ─────────────────────────────────────────
 
   /**
-   * Execute a raw SQL query.
-   * @param {string} sql
-   * @param {unknown[]} [params]
-   * @returns {QueryHelper}
-   */
-  raw(sql, params = []) {
-    this._raw = { sql, params }
-    return this
-  }
-
-  // ─── BUILD ────────────────────────────────────────────────────
-
-  /**
-   * Build the SQL string and params array.
+   * Finalize and return `{ sql, params }`.
    * @returns {{ sql: string, params: unknown[] }}
    */
   build() {
-    // Raw SQL override
-    if (this._raw) {
-      return { sql: this._raw.sql, params: this._raw.params }
+    if (!this._table) {
+      throw new Error('QueryHelper: table name is required')
     }
-
-    if (!this._table) throw new Error('QueryHelper: table() must be called before build()')
 
     this._params = []
     let sql = ''
@@ -358,22 +417,48 @@ export class QueryHelper {
       case 'DELETE':
         sql = this._buildDelete()
         break
-      default:
-        throw new Error(`QueryHelper: unsupported operation "${this._operation}"`)
+      default: throw new Error(`QueryHelper: unsupported operation "${this._operation}"`)
     }
 
     return { sql, params: this._params }
   }
 
+  /**
+   * Finalize and return `{ text, values }` — pg-style property names.
+   * This is the primary method used before calling `this.runQuery(text, values, bool)`.
+   *
+   * @returns {{ text: string, values: unknown[] }}
+   */
+  toParam() {
+    const { sql, params } = this.build()
+    return { text: sql, values: params }
+  }
+
+  // ─── PRIVATE BUILDERS ─────────────────────────────────────────
+
   _buildSelect() {
-    let sql = `SELECT ${this._columns} FROM ${this._table}`
+    const columns  = (this._fields.length > 0)
+      ? this._fields.join(', ')
+      : (this._columns ?? '*')
+    const tableRef = this._tableAlias ? `${this._table} ${this._tableAlias}` : this._table
+    let sql = `SELECT ${columns} FROM ${tableRef}`
     sql += this._buildJoins()
     sql += this._buildWhere()
-    if (this._groupBy) sql += ` GROUP BY ${this._groupBy}`
-    if (this._having)  sql += ` HAVING ${this._having}`
-    if (this._orderClauses.length > 0) sql += ` ORDER BY ${this._orderClauses.join(', ')}`
-    if (this._limitVal  !== null) sql += ` LIMIT ${this._limitVal}`
-    if (this._offsetVal !== null) sql += ` OFFSET ${this._offsetVal}`
+    if (this._groupBy)              {
+      sql += ` GROUP BY ${this._groupBy}`
+    }
+    if (this._having)               {
+      sql += ` HAVING ${this._having}`
+    }
+    if (this._orderClauses.length)  {
+      sql += ` ORDER BY ${this._orderClauses.join(', ')}`
+    }
+    if (this._limitVal  !== null)   {
+      sql += ` LIMIT ${this._limitVal}`
+    }
+    if (this._offsetVal !== null)   {
+      sql += ` OFFSET ${this._offsetVal}`
+    }
     return sql
   }
 
@@ -381,15 +466,14 @@ export class QueryHelper {
     if (!this._insertData || typeof this._insertData !== 'object') {
       throw new Error('QueryHelper: insert() requires a data object')
     }
-
-    const keys   = Object.keys(this._insertData)
-    const values  = Object.values(this._insertData)
+    const keys         = Object.keys(this._insertData)
+    const values       = Object.values(this._insertData)
     const placeholders = keys.map((_, i) => `$${this._params.length + i + 1}`)
-
     this._params.push(...values)
-
     let sql = `INSERT INTO ${this._table} (${keys.join(', ')}) VALUES (${placeholders.join(', ')})`
-    if (this._returning) sql += ` RETURNING ${this._returning}`
+    if (this._returning) {
+      sql += ` RETURNING ${this._returning}`
+    }
     return sql
   }
 
@@ -397,45 +481,49 @@ export class QueryHelper {
     if (!this._updateData || typeof this._updateData !== 'object') {
       throw new Error('QueryHelper: update() requires a data object')
     }
-
     const setClauses = []
     for (const [key, val] of Object.entries(this._updateData)) {
       this._params.push(val)
       setClauses.push(`${key} = $${this._params.length}`)
     }
-
     let sql = `UPDATE ${this._table} SET ${setClauses.join(', ')}`
     sql += this._buildWhere()
-    if (this._returning) sql += ` RETURNING ${this._returning}`
+    if (this._returning) {
+      sql += ` RETURNING ${this._returning}`
+    }
     return sql
   }
 
   _buildDelete() {
     let sql = `DELETE FROM ${this._table}`
     sql += this._buildWhere()
-    if (this._returning) sql += ` RETURNING ${this._returning}`
+    if (this._returning) {
+      sql += ` RETURNING ${this._returning}`
+    }
     return sql
   }
 
   _buildJoins() {
-    if (this._joins.length === 0) return ''
-    return ' ' + this._joins.map(j => `${j.type} ${j.table} ON ${j.on}`).join(' ')
+    if (this._joins.length === 0) {
+      return ''
+    }
+    return ` ${  this._joins.map(j => `${j.type} ${j.table} ON ${j.on}`).join(' ')}`
   }
 
   _buildWhere() {
-    if (this._conditions.length === 0) return ''
+    if (this._conditions.length === 0) {
+      return ''
+    }
 
     const clauses = []
     for (const cond of this._conditions) {
       const { column, operator, value, conjunction } = cond
-
       let clause = ''
 
       if (operator === 'IS' || operator === 'IS NOT') {
         clause = `${column} ${operator} NULL`
       } else if (operator === 'IN' || operator === 'NOT IN') {
         if (!Array.isArray(value) || value.length === 0) {
-          // Empty IN → always false; empty NOT IN → always true
           clause = operator === 'IN' ? 'FALSE' : 'TRUE'
         } else {
           const placeholders = value.map(v => {
@@ -461,7 +549,6 @@ export class QueryHelper {
       clauses.push({ clause, conjunction })
     }
 
-    // Build WHERE string
     let whereStr = ' WHERE '
     for (let i = 0; i < clauses.length; i++) {
       if (i === 0) {
@@ -470,119 +557,23 @@ export class QueryHelper {
         whereStr += ` ${clauses[i].conjunction} ${clauses[i].clause}`
       }
     }
-
     return whereStr
   }
+}
 
-  // ─── EXECUTORS ────────────────────────────────────────────────
+// ─── STANDALONE UTILITIES ─────────────────────────────────────
 
-  /**
-   * Execute and return all rows.
-   * @returns {Promise<object[]>}
-   */
-  async execute() {
-    const { sql, params } = this.build()
-    const result = await this._pool.query(sql, params)
-    return result.rows
+/**
+ * Strip everything except letters, digits, underscores, and dots from a SQL identifier.
+ * Returns `null` if the result is empty.
+ *
+ * @param {string} raw
+ * @returns {string|null}
+ */
+export function sanitizeIdentifier(raw) {
+  if (typeof raw !== 'string') {
+    return null
   }
-
-  /**
-   * Execute and return the first row, or null.
-   * @returns {Promise<object|null>}
-   */
-  async executeOne() {
-    const { sql, params } = this.build()
-    const result = await this._pool.query(sql, params)
-    return result.rows[0] ?? null
-  }
-
-  /**
-   * Execute and return the scalar value of the first column of the first row.
-   * Useful for COUNT(*), SUM(), MAX(), etc.
-   * @returns {Promise<unknown>}
-   */
-  async executeValue() {
-    const { sql, params } = this.build()
-    const result = await this._pool.query(sql, params)
-    const row = result.rows[0]
-    if (!row) return null
-    return Object.values(row)[0]
-  }
-
-  /**
-   * Execute and return the affected row count (for INSERT/UPDATE/DELETE).
-   * @returns {Promise<number>}
-   */
-  async executeCount() {
-    const { sql, params } = this.build()
-    const result = await this._pool.query(sql, params)
-    return result.rowCount
-  }
-
-  /**
-   * Execute a paginated SELECT query.
-   * Returns data rows + total count + pagination metadata.
-   *
-   * @param {{ page?: number, pageSize?: number }} opts
-   * @returns {Promise<{ data: object[], total: number, page: number, pageSize: number, totalPages: number }>}
-   */
-  async paginate({ page = 1, pageSize = 20 } = {}) {
-    const safePage     = Math.max(1, Math.floor(page))
-    const safePageSize = Math.max(1, Math.min(200, Math.floor(pageSize)))
-    const offset       = (safePage - 1) * safePageSize
-
-    // Clone conditions for the count query
-    const countQh = new QueryHelper(this._pool)
-    countQh._table      = this._table
-    countQh._conditions = [...this._conditions]
-    countQh._joins      = [...this._joins]
-    countQh._groupBy    = this._groupBy
-    countQh._having     = this._having
-    countQh._operation  = 'SELECT'
-    countQh._columns    = 'COUNT(*)'
-    countQh._isCount    = true
-
-    // Data query
-    this._limitVal  = safePageSize
-    this._offsetVal = offset
-
-    const [data, totalResult] = await Promise.all([
-      this.execute(),
-      countQh.executeValue(),
-    ])
-
-    const total      = parseInt(String(totalResult), 10) || 0
-    const totalPages = Math.ceil(total / safePageSize)
-
-    return { data, total, page: safePage, pageSize: safePageSize, totalPages }
-  }
-
-  // ─── TRANSACTION SUPPORT ──────────────────────────────────────
-
-  /**
-   * Run a callback inside a database transaction.
-   *
-   * @param {(qh: QueryHelper) => Promise<T>} callback
-   * @returns {Promise<T>}
-   * @template T
-   */
-  async transaction(callback) {
-    const client = await this._pool.connect()
-    try {
-      await client.query('BEGIN')
-
-      // Create a QueryHelper backed by the transaction client
-      const txPool = { query: (sql, params) => client.query(sql, params) }
-      const txQh   = new QueryHelper(txPool)
-
-      const result = await callback(txQh)
-      await client.query('COMMIT')
-      return result
-    } catch (err) {
-      await client.query('ROLLBACK')
-      throw err
-    } finally {
-      client.release()
-    }
-  }
+  const cleaned = raw.replace(/[^a-zA-Z0-9_.]/g, '')
+  return cleaned.length > 0 ? cleaned : null
 }

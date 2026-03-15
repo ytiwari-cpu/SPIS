@@ -1,20 +1,18 @@
 import { BaseController } from '../../../../base/baseController.js'
 import { AdminService } from './adminService.js'
-import { AdminRepository } from './adminRepository.js'
 
 export class AdminController extends BaseController {
-  constructor(ctx) {
-    super(ctx)
-    const repo = new AdminRepository(ctx)
-    this.service = new AdminService(repo)
+  constructor(context) {
+    super(context)
+    this.adminService = new AdminService(context)
   }
 
   // ── Current user ────────────────────────────────────────────────────────
 
-  async getMyPermissions() {
+  async getMyPermissions(user) {
     try {
-      const userId      = this.context.user.sub
-      const permissions = await this.service.getMyPermissions(userId)
+      const userId      = user.sub
+      const permissions = await this.adminService.getMyPermissions(userId)
       this.respondOk({ success: true, data: { user_id: userId, permissions } })
     } catch (error) {
       this.log.error('Error fetching current user permissions', { user_id: this.context.user?.sub, error: error.message })
@@ -24,20 +22,16 @@ export class AdminController extends BaseController {
 
   // ── User management ─────────────────────────────────────────────────────
 
-  async listUsers() {
+  async listUsers(query) {
     try {
-      const { page, limit, status, role, search } = this.context.request.query
-      const result   = await this.service.listUsers({
-        page:   page   ? parseInt(page, 10)  : 1,
-        limit:  limit  ? parseInt(limit, 10) : 20,
-        status, role, search,
+      const { page, limit, status, role, search } = query
+      const result = await this.adminService.listUsers({
+        page, limit, status, role, search,
       })
-      const pageNum  = page  ? parseInt(page, 10)  : 1
-      const limitNum = limit ? parseInt(limit, 10) : 20
       this.respondOk({
-        success: true,
-        data: result.users,
-        pagination: { page: pageNum, limit: limitNum, total: result.total, totalPages: Math.ceil(result.total / limitNum) },
+        success:    true,
+        data:       result.users,
+        pagination: result.pagination,
       })
     } catch (error) {
       this.log.error('Error listing users', { error: error.message })
@@ -45,11 +39,12 @@ export class AdminController extends BaseController {
     }
   }
 
-  async getUser() {
+  async getUser(params) {
     try {
-      const { userId } = this.context.request.params
-      const user = await this.service.getUser(userId)
-      if (!user) return this.respondNotFound({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } })
+      const user = await this.adminService.getUser(params.userId)
+      if (!user) {
+        return this.respondNotFound({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } })
+      }
       this.respondOk({ success: true, data: user })
     } catch (error) {
       this.log.error('Error fetching user', { error: error.message })
@@ -57,15 +52,14 @@ export class AdminController extends BaseController {
     }
   }
 
-  async updateUserRoles() {
+  async updateUserRoles(params, body) {
     try {
-      const { userId } = this.context.request.params
-      const { roles }  = this.context.request.body
+      const { roles } = body
       if (!roles || !Array.isArray(roles)) {
         return this.respondBadRequest({ success: false, error: { code: 'VALIDATION_ERROR', message: 'roles must be an array' } })
       }
-      const user = await this.service.updateUserRoles(userId, roles)
-      this.log.info('User roles updated', { user_id: userId, roles, updated_by: this.context.user?.email || 'system' })
+      const user = await this.adminService.updateUserRoles(params.userId, roles)
+      this.log.info('User roles updated', { user_id: params.userId, roles, updated_by: this.context.user?.email || 'system' })
       this.respondOk({ success: true, data: user })
     } catch (error) {
       this.log.error('Error updating user roles', { error: error.message })
@@ -73,18 +67,18 @@ export class AdminController extends BaseController {
     }
   }
 
-  async disableUser() {
+  async disableUser(params) {
     try {
-      await this.service.disableUser(this.context.request.params.userId)
+      await this.adminService.disableUser(params.userId)
       this.respondOk({ success: true, data: { message: 'User disabled' } })
     } catch (error) {
       this.respondError({ success: false, error: { code: 'UPDATE_ERROR', message: 'Failed to disable user' } })
     }
   }
 
-  async enableUser() {
+  async enableUser(params) {
     try {
-      await this.service.enableUser(this.context.request.params.userId)
+      await this.adminService.enableUser(params.userId)
       this.respondOk({ success: true, data: { message: 'User enabled' } })
     } catch (error) {
       this.respondError({ success: false, error: { code: 'UPDATE_ERROR', message: 'Failed to enable user' } })
@@ -93,71 +87,71 @@ export class AdminController extends BaseController {
 
   // ── Roles ────────────────────────────────────────────────────────────────
 
-  async listRoles() {
+  async listRoles(query) {
     try {
-      const { is_active } = this.context.request.query
+      const { is_active } = query
       // Default to active=true; accept 'false' string from query string
       const isActive = is_active === 'false' ? false : true
-      const roles = await this.service.listRoles(isActive)
+      const roles = await this.adminService.listRoles(isActive)
       this.respondOk({ success: true, data: roles })
     } catch (error) {
       this.respondError({ success: false, error: { code: 'FETCH_ERROR', message: 'Failed to fetch roles' } })
     }
   }
 
-  async getRole() {
+  async getRole(params) {
     try {
-      const role = await this.service.getRole(this.context.request.params.roleName)
-      if (!role) return this.respondNotFound({ success: false, error: { code: 'NOT_FOUND', message: 'Role not found' } })
+      const role = await this.adminService.getRole(params.roleName)
+      if (!role) {
+        return this.respondNotFound({ success: false, error: { code: 'NOT_FOUND', message: 'Role not found' } })
+      }
       this.respondOk({ success: true, data: role })
     } catch (error) {
       this.respondError({ success: false, error: { code: 'FETCH_ERROR', message: 'Failed to fetch role' } })
     }
   }
 
-  async createRole() {
+  async createRole(body) {
     try {
-      const { name, description, permissions } = this.context.request.body
-      if (!name) return this.respondBadRequest({ success: false, error: { code: 'VALIDATION_ERROR', message: 'name is required' } })
-      const role = await this.service.createRole({ name, description, permissions: permissions || [] })
+      const role = await this.adminService.createRole(body)
       this.respondCreated({ success: true, data: role })
     } catch (error) {
       this.respondError({ success: false, error: { code: 'CREATE_ERROR', message: error.message } })
     }
   }
 
-  async updateRole() {
+  async updateRole(params, body) {
     try {
-      const { roleName } = this.context.request.params
-      const { name, description, permissions } = this.context.request.body
-      const updated = await this.service.updateRole(roleName, { name, description, permissions })
+      const { name, description, permissions } = body
+      const updated = await this.adminService.updateRole(params.roleName, { name, description, permissions })
       this.respondOk({ success: true, data: updated })
     } catch (error) {
       this.respondError({ success: false, error: { code: 'UPDATE_ERROR', message: error.message } })
     }
   }
 
-  async deleteRole() {
+  async deleteRole(params) {
     try {
-      await this.service.deleteRole(this.context.request.params.roleName)
+      await this.adminService.deleteRole(params.roleId)
       this.respondOk({ success: true, data: { message: 'Role soft-deleted' } })
     } catch (error) {
       this.respondError({ success: false, error: { code: 'DELETE_ERROR', message: error.message } })
     }
   }
 
-  async restoreRole() {
+  async restoreRole(params) {
     try {
-      const restored = await this.service.restoreRole(this.context.request.params.roleName)
+      const restored = await this.adminService.restoreRole(params.roleName)
       this.respondOk({ success: true, data: restored })
     } catch (error) {
       this.respondError({ success: false, error: { code: 'RESTORE_ERROR', message: error.message } })
     }
   }
 
-  async permanentDeleteRole() {
+  async permanentDeleteRole({roleId}) {
+    console.log('>>>>>>>>>>>>> role name', roleId)
     try {
-      await this.service.permanentlyDeleteRole(this.context.request.params.roleName)
+      await this.adminService.permanentlyDeleteRole(roleId)
       this.respondOk({ success: true, data: { message: 'Role permanently deleted' } })
     } catch (error) {
       this.respondError({ success: false, error: { code: 'DELETE_ERROR', message: error.message } })
@@ -168,7 +162,7 @@ export class AdminController extends BaseController {
 
   async listPermissions() {
     try {
-      const permissions = await this.service.listPermissions()
+      const permissions = await this.adminService.listPermissions()
       this.respondOk({ success: true, data: permissions })
     } catch (error) {
       this.respondError({ success: false, error: { code: 'FETCH_ERROR', message: 'Failed to fetch permissions' } })
@@ -177,51 +171,48 @@ export class AdminController extends BaseController {
 
   async listPermissionsByModule() {
     try {
-      const permissions = await this.service.listPermissionsByModule()
+      const permissions = await this.adminService.listPermissionsByModule()
       this.respondOk({ success: true, data: permissions })
     } catch (error) {
       this.respondError({ success: false, error: { code: 'FETCH_ERROR', message: 'Failed to fetch permissions' } })
     }
   }
 
-  async getRolePermissions() {
+  async getRolePermissions(params) {
     try {
-      const permissions = await this.service.getRolePermissions(this.context.request.params.roleName)
+      const permissions = await this.adminService.getRolePermissions(params.roleName)
       this.respondOk({ success: true, data: permissions })
     } catch (error) {
       this.respondError({ success: false, error: { code: 'FETCH_ERROR', message: 'Failed to fetch role permissions' } })
     }
   }
 
-  async updateRolePermissions() {
+  async updateRolePermissions(params, body) {
     try {
-      const { roleName }    = this.context.request.params
-      const { permissions } = this.context.request.body
+      const { permissions } = body
       if (!permissions || !Array.isArray(permissions)) {
         return this.respondBadRequest({ success: false, error: { code: 'VALIDATION_ERROR', message: 'permissions must be an array' } })
       }
-      await this.service.replaceRolePermissions(roleName, permissions)
+      await this.adminService.replaceRolePermissions(params.roleName, permissions)
       this.respondOk({ success: true, data: { message: 'Role permissions updated' } })
     } catch (error) {
       this.respondError({ success: false, error: { code: 'UPDATE_ERROR', message: error.message } })
     }
   }
 
-  async grantPermission() {
+  async grantPermission(params, body) {
     try {
-      const { roleName } = this.context.request.params
-      const { permission_code } = this.context.request.body
-      await this.service.grantPermission(roleName, permission_code, this.context.user?.sub)
+      const { permission_code } = body
+      await this.adminService.grantPermission(params.roleName, permission_code, this.context.user?.sub)
       this.respondOk({ success: true, data: { message: 'Permission granted' } })
     } catch (error) {
       this.respondError({ success: false, error: { code: 'GRANT_ERROR', message: error.message } })
     }
   }
 
-  async revokePermission() {
+  async revokePermission(params) {
     try {
-      const { roleName, permissionKey } = this.context.request.params
-      await this.service.revokePermission(roleName, permissionKey)
+      await this.adminService.revokePermission(params.roleName, params.permissionKey)
       this.respondOk({ success: true, data: { message: 'Permission revoked' } })
     } catch (error) {
       this.respondError({ success: false, error: { code: 'REVOKE_ERROR', message: error.message } })
@@ -230,46 +221,41 @@ export class AdminController extends BaseController {
 
   // ── Audit logs ───────────────────────────────────────────────────────────
 
-  async listAuditLogs() {
+  async listAuditLogs(query) {
     try {
       const {
         page, limit,
         actor_sub, action, resource_type,
         method, status_code,
         start_date, end_date,
-      } = this.context.request.query
-      const pageNum  = page  ? parseInt(page, 10)  : 1
-      const limitNum = limit ? parseInt(limit, 10) : 20
-      const result = await this.service.listAuditLogs({
-        page:          pageNum,
-        limit:         limitNum,
+      } = query
+      const result = await this.adminService.listAuditLogs({
+        page,
+        limit,
         actor_sub,
         action,
         resource_type,
         method,
-        status_code:   status_code ? parseInt(status_code, 10) : undefined,
+        status_code,
         start_date,
         end_date,
       })
       this.respondOk({
-        success: true,
-        data: result.logs,
-        pagination: {
-          page:       pageNum,
-          limit:      limitNum,
-          total:      result.total,
-          totalPages: Math.ceil(result.total / limitNum),
-        },
+        success:    true,
+        data:       result.logs,
+        pagination: result.pagination,
       })
     } catch (error) {
       this.respondError({ success: false, error: { code: 'FETCH_ERROR', message: 'Failed to fetch audit logs' } })
     }
   }
 
-  async getAuditLog() {
+  async getAuditLog(params) {
     try {
-      const log = await this.service.getAuditLog(this.context.request.params.logId)
-      if (!log) return this.respondNotFound({ success: false, error: { code: 'NOT_FOUND', message: 'Audit log not found' } })
+      const log = await this.adminService.getAuditLog(params.logId)
+      if (!log) {
+        return this.respondNotFound({ success: false, error: { code: 'NOT_FOUND', message: 'Audit log not found' } })
+      }
       this.respondOk({ success: true, data: log })
     } catch (error) {
       this.respondError({ success: false, error: { code: 'FETCH_ERROR', message: 'Failed to fetch audit log' } })

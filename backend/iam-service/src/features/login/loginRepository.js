@@ -1,52 +1,97 @@
 /**
  * IAM — Login Repository
- *
- * All database queries related to credential-based login.
- * Wraps the monolithic db/repository.ts functions for use by LoginService.
  */
 
-import { BaseDbRepository } from '../../../../base/baseDbRepository.js'
-import { pool } from '../../db/pool.js'
-import {
-  getUserByNationalIdHash,
-  getUserRoles,
-  getUserPermissions,
-  recordLoginEvent,
-  incrementFailedLogins,
-  resetFailedLogins,
-  lockUser,
-} from '../../db/repository.js'
+import { BaseRepository } from '../../../../base/baseRepository.js'
+import { QueryHelper }    from '../../../../base/queryHelper.js'
 
-export class LoginRepository extends BaseDbRepository {
-  constructor(ctx) {
-    super(ctx, pool)
+export class LoginRepository extends BaseRepository {
+  constructor(context) {
+    super(context)
   }
 
-  findByNationalIdHash(hash) {
-    return getUserByNationalIdHash(hash)
+  // ── Users ─────────────────────────────────────────────────────────────
+
+  async findByNationalIdHash(hash) {
+    const { text, values } = new QueryHelper(this.tables.USERS)
+      .select('*')
+      .where('national_id_hash', '=', hash)
+      .toParam()
+    const rows = await this.runQuery(text, values, true)
+    return rows[0] ?? null
   }
 
-  getRoles(userId) {
-    return getUserRoles(userId)
+  // ── Roles / Permissions ───────────────────────────────────────────────
+
+  async getRoles(userId) {
+    const { text, values } = new QueryHelper(this.tables.USER_ROLES)
+      .select('*')
+      .where('user_id', '=', userId)
+      .toParam()
+    return await this.runQuery(text, values, true)
   }
 
-  getPermissions(userId) {
-    return getUserPermissions(userId)
+  async getPermissions(userId) {
+    const { text, values } = new QueryHelper(this.tables.PERMISSIONS)
+      .select('p')
+      .field('DISTINCT p.permission_key')
+      .join(this.tables.ROLE_PERMISSIONS, 'rp', 'rp.permission_key = p.permission_key')
+      .join(this.tables.USER_ROLES, 'ur', 'rp.role_name = ur.role_name::text')
+      .where('ur.user_id', '=', userId)
+      .toParam()
+    const rows = await this.runQuery(text, values, true)
+    return rows.map(r => r.permission_key)
   }
 
-  recordEvent(params) {
-    return recordLoginEvent(params)
+  // ── Login events ──────────────────────────────────────────────────────
+
+  async recordEvent({ userId, ip, userAgent, outcome }) {
+    const { text, values } = new QueryHelper(this.tables.LOGIN_EVENTS)
+      .insert({ user_id: userId, ip, user_agent: userAgent, outcome })
+      .toParam()
+    await this.runQuery(text, values, false)
   }
 
-  incrementFailed(userId) {
-    return incrementFailedLogins(userId)
+  // ── Account lockout ───────────────────────────────────────────────────
+
+  async incrementFailed(userId) {
+    const { text: selText, values: selValues } = new QueryHelper(this.tables.USERS)
+      .select('*')
+      .where('user_id', '=', userId)
+      .toParam()
+    const rows = await this.runQuery(selText, selValues, true)
+    const current = rows[0]?.failed_login_attempts ?? 0
+    const next = current + 1
+
+    const { text, values } = new QueryHelper(this.tables.USERS)
+      .update({ failed_login_attempts: next })
+      .where('user_id', '=', userId)
+      .toParam()
+    await this.runQuery(text, values, false)
+    return next
   }
 
-  resetFailed(userId) {
-    return resetFailedLogins(userId)
+  async resetFailed(userId) {
+    const { text, values } = new QueryHelper(this.tables.USERS)
+      .update({ status: 'active', failed_login_attempts: 0, locked_until: null })
+      .where('user_id', '=', userId)
+      .toParam()
+    await this.runQuery(text, values, false)
   }
 
-  lock(userId, lockedUntil) {
-    return lockUser(userId, lockedUntil)
+  async unlock(userId) {
+    const { text, values } = new QueryHelper(this.tables.USERS)
+      .update({ status: 'active', failed_login_attempts: 0, locked_until: null })
+      .where('user_id', '=', userId)
+      .toParam()
+    await this.runQuery(text, values, false)
+  }
+
+  async lock(userId, lockedUntil) {
+    const { text, values } = new QueryHelper(this.tables.USERS)
+      .update({ status: 'locked', locked_until: lockedUntil })
+      .where('user_id', '=', userId)
+      .toParam()
+    await this.runQuery(text, values, false)
   }
 }

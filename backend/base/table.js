@@ -4,60 +4,71 @@
  * Single source of truth for ALL table names across all SPIS backend services.
  * Every repository MUST import table names from here — never use raw strings.
  *
- * Grouped by service/schema.
+ * Grouped by service. Each service has its own Supabase project and schema.
+ *
+ * Table name format rules:
+ *  - IAM and Email services use the PUBLIC schema — plain table names, no prefix.
+ *  - Family service uses the 'family' schema — AUDIT_LOG uses 'family.<table>'
+ *    because it is accessed via pool (no schema-scoping), all other tables use
+ *    plain names via the schema-scoped Supabase JS client.
+ *  - Programme service uses the 'programme' schema — same rule as family.
+ *
  * DO NOT rename any table or column — these match the deployed schema exactly.
  */
 
 // ═══════════════════════════════════════════════════════════════
-// FAMILY SERVICE TABLES (Supabase — family schema)
+// FAMILY SERVICE  (Supabase — family schema)
 // ═══════════════════════════════════════════════════════════════
 
-export const FAMILY_TABLES = {
-  FAMILY:               'family',
-  FAMILY_MEMBER:        'family_member',
-  ADDRESS:              'address',
-  DOCUMENTS:            'documents',
-  DOCUMENT_VERIFICATION:'document_verification',
-  BIOMETRIC_METADATA:   'biometric_metadata',
-  ACCOUNT_DETAILS:      'account_details',
-  IDENTITY_MATCH:       'identity_match',
-  FAMILY_HISTORY:       'family_history',
-  FAMILY_EVENT_OUTBOX:  'family_event_outbox',
-  HOUSE_SERVICES:       'house_services',
+export const FAMILY = {
+  FAMILY:                'family',
+  FAMILY_MEMBER:         'family_member',
+  ADDRESS:               'address',
+  DOCUMENTS:             'documents',
+  DOCUMENT_VERIFICATION: 'document_verification',
+  BIOMETRIC_METADATA:    'biometric_metadata',
+  ACCOUNT_DETAILS:       'account_details',
+  IDENTITY_MATCH:        'identity_match',
+  FAMILY_HISTORY:        'family_history',
+  FAMILY_EVENT_OUTBOX:   'family_event_outbox',
+  HOUSE_SERVICES:        'house_services',
+  AUDIT_LOG:             'family.audit_logs',  // schema-qualified — accessed via pool
 }
 
 // ═══════════════════════════════════════════════════════════════
-// IAM SERVICE TABLES (PostgreSQL — auth_db)
+// IAM SERVICE  (Supabase — public schema)
 // ═══════════════════════════════════════════════════════════════
 
-export const IAM_TABLES = {
-  USERS:                'users',
-  USER_ROLES:           'user_roles',
-  MFA_FACTORS:          'mfa_factors',
-  LOGIN_EVENTS:         'login_events',
-  PASSWORD_RESET_TOKENS:'password_reset_tokens',
-  PERMISSIONS:          'permissions',
-  ROLE_PERMISSIONS:     'role_permissions',
-  AUDIT_LOGS:           'audit_logs',
+export const IAM = {
+  USERS:                 'users',
+  USER_ROLES:            'user_roles',
+  MFA_FACTORS:           'mfa_factors',
+  LOGIN_EVENTS:          'login_events',
+  PASSWORD_RESET_TOKENS: 'password_reset_tokens',
+  ROLES:                 'roles',
+  PERMISSIONS:           'permissions',
+  ROLE_PERMISSIONS:      'role_permissions',
+  AUDIT_LOG:             'audit_logs',  // business-logic audit (uuid, user_id, created_by, logs)
 }
 
 // ═══════════════════════════════════════════════════════════════
-// EMAIL SERVICE TABLES (PostgreSQL — email_db)
+// EMAIL SERVICE  (Supabase — public schema)
 // ═══════════════════════════════════════════════════════════════
 
-export const EMAIL_TABLES = {
-  EMAIL_REQUESTS:       'email_requests',
-  EMAIL_PROVIDERS:      'email_providers',
-  BOUNCE_FEEDBACK:      'bounce_feedback',
-  RATE_LIMITS:          'rate_limits',
-  TEMPLATE_VERSIONS:    'template_versions',
+export const EMAIL = {
+  EMAIL_REQUESTS:    'email_requests',
+  EMAIL_PROVIDERS:   'email_providers',
+  BOUNCE_FEEDBACK:   'bounce_feedback',
+  RATE_LIMITS:       'rate_limits',
+  TEMPLATE_VERSIONS: 'template_versions',
+  AUDIT_LOG:         'audit_logs',
 }
 
 // ═══════════════════════════════════════════════════════════════
-// PROGRAMME SERVICE TABLES (Supabase — programme schema)
+// PROGRAMME SERVICE  (Supabase — programme schema)
 // ═══════════════════════════════════════════════════════════════
 
-export const PROGRAMME_TABLES = {
+export const PROGRAMME = {
   PROGRAMME_MASTER:           'programme_master',
   PROGRAMME_CONFIG:           'programme_config',
   PROGRAMME_PAYMENT_SETTINGS: 'programme_payment_settings',
@@ -74,15 +85,18 @@ export const PROGRAMME_TABLES = {
   RULE_VARIABLE_CATALOG:      'rule_variable_catalog',
   CUSTOM_FIELD_DEFINITIONS:   'custom_field_definitions',
   CONDITIONALITY_COMPLIANCE:  'conditionality_compliance',
+  AUDIT_LOG:                  'programme.audit_logs',  // schema-qualified — accessed via pool
 }
 
 // ═══════════════════════════════════════════════════════════════
-// COMBINED — flat export for quick access: TABLES.FAMILY, TABLES.USERS, etc.
+// TABLES — grouped by service for quick access
+//   Usage: TABLES.family.AUDIT_LOG, TABLES.iam.USERS, etc.
+//   Or import the service object directly: import { FAMILY } from './table.js'
 // ═══════════════════════════════════════════════════════════════
 
 export const TABLES = {
-  ...FAMILY_TABLES,
-  ...IAM_TABLES,
-  ...EMAIL_TABLES,
-  ...PROGRAMME_TABLES,
+  family:    FAMILY,
+  iam:       IAM,
+  email:     EMAIL,
+  programme: PROGRAMME,
 }

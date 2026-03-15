@@ -11,10 +11,9 @@ import { closeRedis } from './lib/redis.js'
 import { createLogger } from '../../base/logger.js'
 const logger = createLogger('iam-service')
 
-const app = createApp()
-
 async function start() {
   try {
+    const app = await createApp()
     await connectBus()
     app.listen(config.port, () => {
       logger.info('IAM Service API started', { port: config.port, env: config.nodeEnv })
@@ -41,5 +40,3 @@ process.on('SIGINT', shutdown)
 process.on('SIGTERM', shutdown)
 
 start()
-
-export default app

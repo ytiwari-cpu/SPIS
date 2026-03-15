@@ -332,11 +332,23 @@ async function fetchSubjectData(
 
 /**
  * Batch evaluate all eligible subjects for a programme.
+ * Pre-fetches ALL data in ~8 queries, then evaluates in memory — no N+1.
+ *
+ * @param programmeId — the programme to evaluate
+ * @param connections — { programme: Connection, family: Connection } from engineService
  */
-export async function evaluateAllSubjects(programmeId: string): Promise<EvaluationResult[]> {
+export async function evaluateAllSubjects(
+    programmeId: string,
+    connections?: { programme: any; family: any },
+): Promise<EvaluationResult[]> {
+    // If connections are provided, use the optimised batch path
+    if (connections?.programme && connections?.family) {
+        return evaluateAllSubjectsBatch(programmeId, connections)
+    }
+
+    // Legacy fallback: sequential per-subject (still uses Supabase clients)
     if (!familySupabase) throw new Error('Family database not configured')
 
-    // Fetch all families
     const { data: families } = await familySupabase
         .from('family')
         .select('uuid')
@@ -356,4 +368,232 @@ export async function evaluateAllSubjects(programmeId: string): Promise<Evaluati
     }
 
     return results
+}
+
+// ─── BATCH EVALUATION (N14 optimisation) ─────────────────────────
+
+/**
+ * Optimised batch evaluation — 8 queries total instead of 5000+.
+ * Pre-fetches all programme rules, group definitions, and family data,
+ * then evaluates each family in memory.
+ */
+async function evaluateAllSubjectsBatch(
+    programmeId: string,
+    connections: { programme: any; family: any },
+): Promise<EvaluationResult[]> {
+    const { programme: progConn, family: famConn } = connections
+
+    // 1. Pre-fetch programme rules ONCE
+    const rulesResult = await progConn.query(
+        'SELECT * FROM programme_rules WHERE programme_id = $1', [programmeId])
+    const rules = rulesResult.rows as ProgrammeRule[]
+    if (!rules || rules.length === 0) return []
+
+    // 2. Pre-fetch ALL group definitions and group rules ONCE
+    const groupRuleIds = rules
+        .filter((r: ProgrammeRule) => r.rule_group_id)
+        .map((r: ProgrammeRule) => r.rule_group_id!)
+    let groupsMap: Record<string, RuleGroup> = {}
+    let groupRulesMap: Record<string, RuleGroupRule[]> = {}
+
+    if (groupRuleIds.length > 0) {
+        // Build IN clause with parameterised placeholders
+        const groupPlaceholders = groupRuleIds.map((_: string, i: number) => `$${i + 1}`).join(', ')
+
+        const groupsResult = await progConn.query(
+            `SELECT * FROM rule_group WHERE rule_group_id IN (${groupPlaceholders})`,
+            groupRuleIds)
+        groupsMap = Object.fromEntries(
+            (groupsResult.rows || []).map((g: any) => [g.rule_group_id, g]))
+
+        const groupRulesResult = await progConn.query(
+            `SELECT * FROM rule_group_rules WHERE rule_group_id IN (${groupPlaceholders})`,
+            groupRuleIds)
+        for (const gr of groupRulesResult.rows || []) {
+            if (!groupRulesMap[gr.rule_group_id]) groupRulesMap[gr.rule_group_id] = []
+            groupRulesMap[gr.rule_group_id].push(gr)
+        }
+    }
+
+    // 3. Pre-fetch ALL active families + related data in bulk (4 queries, not 4000)
+    const familiesResult = await famConn.query(
+        "SELECT * FROM family WHERE status = 'active' LIMIT 1000")
+    const families = familiesResult.rows || []
+    if (families.length === 0) return []
+
+    const familyUuids = families.map((f: any) => f.uuid)
+    const famPlaceholders = familyUuids.map((_: string, i: number) => `$${i + 1}`).join(', ')
+
+    const addressIds = families.map((f: any) => f.permanent_address_id).filter(Boolean)
+    const addrPlaceholders = addressIds.map((_: string, i: number) => `$${i + 1}`).join(', ')
+
+    const [membersResult, addressResult, houseResult] = await Promise.all([
+        famConn.query(
+            `SELECT * FROM family_member WHERE family_uuid IN (${famPlaceholders}) AND relationship_to_head = 'head'`,
+            familyUuids),
+        addressIds.length > 0
+            ? famConn.query(
+                `SELECT * FROM address WHERE uuid IN (${addrPlaceholders})`,
+                addressIds)
+            : Promise.resolve({ rows: [] }),
+        famConn.query(
+            `SELECT * FROM house_services WHERE family_uuid IN (${famPlaceholders})`,
+            familyUuids),
+    ])
+
+    // 4. Index data by family UUID for O(1) lookup
+    const membersByFamily: Record<string, any> = Object.fromEntries(
+        (membersResult.rows || []).map((m: any) => [m.family_uuid, m]))
+    const addressById: Record<string, any> = Object.fromEntries(
+        (addressResult.rows || []).map((a: any) => [a.uuid, a]))
+    const houseByFamily: Record<string, any> = Object.fromEntries(
+        (houseResult.rows || []).map((h: any) => [h.family_uuid, h]))
+
+    // 5. Evaluate each family IN MEMORY — zero additional DB queries
+    const results: EvaluationResult[] = []
+    for (const family of families) {
+        try {
+            const subjectData: Record<string, unknown> = {
+                family: family,
+                family_member: membersByFamily[family.uuid] || {},
+                address: family.permanent_address_id
+                    ? (addressById[family.permanent_address_id] || {})
+                    : {},
+                house_services: houseByFamily[family.uuid] || {},
+            }
+
+            const result = evaluateSubjectInMemory(
+                programmeId, family.uuid, 'Family',
+                subjectData, rules, groupsMap, groupRulesMap)
+            results.push(result)
+        } catch (err) {
+            console.error(`Error evaluating family ${family.uuid}:`, err)
+        }
+    }
+
+    return results
+}
+
+/**
+ * Evaluate all rules for a subject using pre-fetched in-memory data.
+ * Same logic as evaluateSubject() but reads group data from maps
+ * instead of querying the DB.
+ */
+function evaluateSubjectInMemory(
+    programmeId: string,
+    subjectId: string,
+    subjectType: string,
+    subjectData: Record<string, unknown>,
+    rules: ProgrammeRule[],
+    groupsMap: Record<string, RuleGroup>,
+    groupRulesMap: Record<string, RuleGroupRule[]>,
+): EvaluationResult {
+    const ruleResults: EvaluationResult['rule_results'] = []
+    const groupScores: Record<string, number> = {}
+    let totalScore = 0
+    let allMandatoryPassed = true
+
+    for (const rule of rules) {
+        if (rule.rule_type === 'group' && rule.rule_group_id) {
+            // Use pre-fetched group data — NO DB QUERY
+            const group = groupsMap[rule.rule_group_id]
+            const subRules = groupRulesMap[rule.rule_group_id] || []
+            const groupResult = evaluateGroupRuleInMemory(rule, group, subRules, subjectData)
+            groupScores[rule.rule_group_id] = groupResult.score
+            totalScore += groupResult.score
+
+            ruleResults.push({
+                rule_code: rule.rule_code,
+                variable_code: null,
+                rule_group_id: rule.rule_group_id,
+                passed: groupResult.passed,
+                actual_value: groupResult.score,
+                threshold: rule.threshold_value,
+                score: groupResult.score,
+            })
+
+            if (rule.mandatory_flag && !groupResult.passed) {
+                allMandatoryPassed = false
+            }
+        } else if (rule.variable_code) {
+            const result = evaluateVariableRule(rule, subjectData)
+            totalScore += result.score
+
+            ruleResults.push({
+                rule_code: rule.rule_code,
+                variable_code: rule.variable_code,
+                rule_group_id: null,
+                passed: result.passed,
+                actual_value: result.actualValue,
+                threshold: rule.threshold_value,
+                score: result.score,
+            })
+
+            if (rule.mandatory_flag && !result.passed) {
+                allMandatoryPassed = false
+            }
+        }
+    }
+
+    return {
+        subject_id: subjectId,
+        subject_type: subjectType,
+        eligible: allMandatoryPassed,
+        calculated_score: totalScore,
+        group_scores: groupScores,
+        rule_results: ruleResults,
+    }
+}
+
+/**
+ * Evaluate a composite group rule using pre-fetched group data.
+ * Same logic as evaluateGroupRule() but reads from maps instead of DB.
+ */
+function evaluateGroupRuleInMemory(
+    programmeRule: ProgrammeRule,
+    group: RuleGroup | undefined,
+    subRules: RuleGroupRule[],
+    subjectData: Record<string, unknown>,
+): { passed: boolean; score: number } {
+    if (!group) return { passed: false, score: 0 }
+    if (!subRules || subRules.length === 0) return { passed: true, score: 0 }
+
+    const subResults: { passed: boolean; weight: number; mandatory: boolean }[] = []
+
+    for (const gr of subRules) {
+        const actualValue = resolveVariable(gr.variable_code, subjectData)
+        const passed = compareValue(actualValue, gr.operator, gr.threshold_value)
+        subResults.push({ passed, weight: gr.weight, mandatory: gr.mandatory_flag })
+    }
+
+    let score = 0
+    switch (group.scoring_method) {
+        case 'weighted_sum': {
+            score = subResults.reduce((sum, r) => sum + (r.passed ? r.weight : 0), 0)
+            break
+        }
+        case 'average': {
+            const total = subResults.reduce((sum, r) => sum + (r.passed ? r.weight : 0), 0)
+            score = subResults.length > 0 ? total / subResults.length : 0
+            break
+        }
+        case 'min': {
+            const scores = subResults.map(r => r.passed ? r.weight : 0)
+            score = scores.length > 0 ? Math.min(...scores) : 0
+            break
+        }
+        case 'max': {
+            const scores = subResults.map(r => r.passed ? r.weight : 0)
+            score = scores.length > 0 ? Math.max(...scores) : 0
+            break
+        }
+    }
+
+    const mandatoryPassed = subResults.filter(r => r.mandatory).every(r => r.passed)
+    let passed = mandatoryPassed
+    if (programmeRule.operator && programmeRule.threshold_value) {
+        passed = passed && compareValue(score, programmeRule.operator, programmeRule.threshold_value)
+    }
+
+    return { passed, score }
 }

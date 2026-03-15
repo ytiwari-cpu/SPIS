@@ -1,48 +1,42 @@
 import { BaseController } from '../../../../base/baseController.js'
 import { MfaService } from './mfaService.js'
-import { MfaRepository } from './mfaRepository.js'
 
 export class MfaController extends BaseController {
-  constructor(ctx) {
-    super(ctx)
-    const repo = new MfaRepository(ctx)
-    this.service = new MfaService(repo)
+  constructor(context) {
+    super(context)
+    this.mfaService = new MfaService(context)
   }
 
-  async enrollTotp() {
+  async enrollTotp(user) {
     try {
-      const result = await this.service.enrollTotp(this.context.user.sub)
+      const result = await this.mfaService.enrollTotp(user.sub)
       this.respondOk({ success: true, data: result })
     } catch (err) {
       this.respondError({ success: false, error: err.message })
     }
   }
 
-  async verifyTotp() {
+  async verifyTotp(body, user) {
     try {
-      const result = await this.service.verifyTotpEnrollment(this.context.user.sub, this.context.request.body.code)
+      const result = await this.mfaService.verifyTotpEnrollment(user.sub, body.code)
       this.context.response.status(200).json({ success: true, ...result })
     } catch (err) {
       this.respondError({ success: false, error: err.message })
     }
   }
 
-  async sendEmailOtp() {
+  async sendEmailOtp(body, user) {
     try {
-      const result = await this.service.sendEmailOtp(this.context.user.sub, this.context.request.body.purpose)
+      const result = await this.mfaService.sendEmailOtp(user.sub, body.purpose)
       this.respondOk({ success: true, ...result })
     } catch (err) {
       this.respondError({ success: false, error: err.message })
     }
   }
 
-  async verifyEmailOtp() {
+  async verifyEmailOtp(body, user) {
     try {
-      const valid = await this.service.verifyEmailOtp(
-        this.context.user.sub,
-        this.context.request.body.code,
-        this.context.request.body.purpose,
-      )
+      const valid = await this.mfaService.verifyEmailOtp(user.sub, body.code, body.purpose)
       if (valid) {
         this.respondOk({ success: true, message: 'OTP verified' })
       } else {

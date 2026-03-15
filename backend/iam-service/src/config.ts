@@ -78,7 +78,7 @@ export const config = {
 
   // ── Account Lockout ─────────────────────────────────────
   lockout: {
-    threshold: envInt('LOCKOUT_THRESHOLD', 5),
+    threshold: envInt('LOCKOUT_THRESHOLD', 10),
     durationMinutes: envInt('LOCKOUT_DURATION_MINUTES', 15),
   },
 

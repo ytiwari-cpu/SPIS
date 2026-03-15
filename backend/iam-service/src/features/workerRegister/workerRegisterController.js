@@ -6,19 +6,17 @@
 
 import { BaseController } from '../../../../base/baseController.js'
 import { WorkerRegisterService } from './workerRegisterService.js'
-import { WorkerRegisterRepository } from './workerRegisterRepository.js'
 
 export class WorkerRegisterController extends BaseController {
-  constructor(ctx) {
-    super(ctx)
-    const repo = new WorkerRegisterRepository(ctx)
-    this.service = new WorkerRegisterService(repo)
+  constructor(context) {
+    super(context)
+    this.workerRegisterService = new WorkerRegisterService(context)
   }
 
-  async register() {
-    const { national_id, email, role, secret_key } = this.context.request.body
+  async register(body) {
+    const { national_id, email, role, secret_key } = body
     try {
-      const data = await this.service.register({ national_id, email, role, secret_key })
+      const data = await this.workerRegisterService.register({ national_id, email, role, secret_key })
       this.respondOk({ success: true, data })
     } catch (error) {
       const statusCode = error?.statusCode || 500
@@ -28,10 +26,10 @@ export class WorkerRegisterController extends BaseController {
     }
   }
 
-  async verify() {
-    const { national_id, email, role, otp, password } = this.context.request.body
+  async verify(body) {
+    const { national_id, email, role, otp, password } = body
     try {
-      const data = await this.service.verify({ national_id, email, role, otp, password })
+      const data = await this.workerRegisterService.verify({ national_id, email, role, otp, password })
       this.respondOk({ success: true, data })
     } catch (error) {
       const statusCode = error?.statusCode || 500

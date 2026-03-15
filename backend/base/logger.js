@@ -1,34 +1,31 @@
 /**
  * backend/base/logger.js
  *
- * Centralized structured logger for all SPIS backend services.
- *
- * Extracted from iam-service/src/lib/logger.ts and generalized:
- * - JSON output for log aggregators
- * - PII masking (passwords, OTPs, national_id, tokens, secrets)
- * - Configurable service name per instance
- * - Child loggers with embedded requestId / userId
+ * Structured JSON logger for all SPIS backend services.
  *
  * Usage:
  *   import { createLogger } from '../../../../base/logger.js'
  *
- *   const logger = createLogger('family-service')
+ *   // Plain logger (startup, workers, services):
+ *   const logger = createLogger('FamilyService')
  *   logger.info('Server started', { port: 3001 })
  *
- *   // Child logger (per request, carries requestId)
- *   const reqLogger = logger.child({ requestId: 'abc-123', userId: 'u-1' })
- *   reqLogger.info('Request received')
+ *   // Request-scoped logger (controllers, context) — request context is auto-extracted:
+ *   const logger = createLogger('ApiContext', req)
+ *   logger.info('Request received')
+ *   // → { level: 'info', logger: 'ApiContext', requestId: '...',
+ *   //     method: 'GET', url: '/...', userId: '...', message: '...' }
  */
 
-// ═══════════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────────
 // LOG LEVELS
-// ═══════════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────────
 
 const LEVEL_ORDER = { debug: 0, info: 1, warn: 2, error: 3 }
 
-// ═══════════════════════════════════════════════════════════════
-// PII MASKING
-// ═══════════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────────
+// PII MASKING  — internal only, runs on every meta object
+// ───────────────────────────────────────────────────────────────
 
 const SENSITIVE_KEYS = new Set([
   'password', 'new_password', 'otp', 'otp_code', 'otp_hash',
@@ -38,131 +35,175 @@ const SENSITIVE_KEYS = new Set([
   'pin', 'credential', 'private_key', 'privatekey',
 ])
 
-/**
- * Mask a single sensitive value.
- * @param {string} key
- * @param {unknown} value
- * @returns {unknown}
- */
 function maskValue(key, value) {
   if (typeof value === 'string' && SENSITIVE_KEYS.has(key.toLowerCase())) {
-    if (value.length <= 4) return '***'
-    return value.slice(0, 2) + '***' + value.slice(-2)
+    return value.length <= 4 ? '***' : `${value.slice(0, 2)  }***${  value.slice(-2)}`
   }
   return value
 }
 
-/**
- * Deep-mask an object, redacting all sensitive keys.
- * @param {Record<string, unknown>} obj
- * @param {number} [depth=0]
- * @returns {Record<string, unknown>}
- */
 function maskObject(obj, depth = 0) {
-  if (depth > 5) return '[MAX_DEPTH]'
-  if (obj === null || obj === undefined) return obj
-  if (typeof obj !== 'object') return obj
+  if (depth > 5 || obj === null || obj === undefined) {
+    return obj
+  }
+  if (typeof obj !== 'object') {
+    return obj
+  }
   if (Array.isArray(obj)) {
     return obj.slice(0, 20).map(item => maskObject(item, depth + 1))
   }
 
   const result = {}
   for (const [key, val] of Object.entries(obj)) {
-    if (val && typeof val === 'object' && !Array.isArray(val)) {
-      result[key] = maskObject(val, depth + 1)
-    } else {
-      result[key] = maskValue(key, val)
-    }
+    result[key] = (val && typeof val === 'object' && !Array.isArray(val))
+      ? maskObject(val, depth + 1)
+      : maskValue(key, val)
   }
   return result
 }
 
-/**
- * Mask email addresses: "john@acme.com" → "jo***@acme.com"
- * @param {string} email
- * @returns {string}
- */
 function maskEmail(email) {
-  if (typeof email !== 'string') return email
+  if (typeof email !== 'string') {
+    return email
+  }
   const [local, domain] = email.split('@')
-  if (!domain) return '***@***'
-  const maskedLocal = local.length <= 2 ? '***' : local.slice(0, 2) + '***'
-  return `${maskedLocal}@${domain}`
+  if (!domain) {
+    return '***@***'
+  }
+  return `${local.length <= 2 ? '***' : `${local.slice(0, 2)  }***`}@${domain}`
 }
 
-// ═══════════════════════════════════════════════════════════════
-// LOGGER FACTORY
-// ═══════════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────────
+// REQUEST CONTEXT EXTRACTION
+// ───────────────────────────────────────────────────────────────
 
 /**
- * Create a structured logger for a service.
- *
- * @param {string} serviceName — e.g. 'family-service', 'iam-service'
- * @param {{ level?: string }} [options]
- * @returns {{ info, warn, error, debug, child }}
+ * Extract loggable context from an Express request.
+ * Safe — never throws if req is malformed.
  */
-export function createLogger(serviceName, options = {}) {
-  const currentLevel = (options.level || process.env.LOG_LEVEL || 'info').toLowerCase()
+function filterRequest(req) {
+  if (!req || typeof req !== 'object') {
+    return {}
+  }
+  return {
+    requestId: req.requestId || req.headers?.['x-request-id'] || undefined,
+    method:    req.method    || undefined,
+    url:       req.url || req.path || undefined,
+    userId:    req.user?.sub || req.user?.id || undefined,
+  }
+}
 
-  /**
-   * Core emit function — writes a single JSON log line.
-   * @param {string} level
-   * @param {string} message
-   * @param {Record<string, unknown>} [meta]
-   * @param {Record<string, unknown>} [baseMeta] — persistent meta from child()
-   */
-  function emit(level, message, meta, baseMeta = {}) {
-    if ((LEVEL_ORDER[level] ?? 1) < (LEVEL_ORDER[currentLevel] ?? 1)) return
+// ───────────────────────────────────────────────────────────────
+// LOGGER FACTORY
+// ───────────────────────────────────────────────────────────────
 
-    const entry = {
-      timestamp: new Date().toISOString(),
-      level,
-      service: serviceName,
-      ...baseMeta,
-      message,
+/**
+ * Create a structured logger.
+ *
+ * @param {string}  [name]    — component label, e.g. 'ApiContext', 'FamilyService'
+ * @param {object}  [request] — Express req; when provided, requestId/method/url/userId are auto-included
+ * @returns {{ debug, info, warn, error }}
+ */
+// ───────────────────────────────────────────────────────────────
+// PRETTY PRINTER (development / LOG_FORMAT=pretty)
+// ───────────────────────────────────────────────────────────────
+
+const COLORS = {
+  reset: '\x1b[0m',
+  bold:  '\x1b[1m',
+  dim:   '\x1b[2m',
+  debug: '\x1b[36m',   // cyan
+  info:  '\x1b[32m',   // green
+  warn:  '\x1b[33m',   // yellow
+  error: '\x1b[31m',   // red
+  label: '\x1b[35m',   // magenta  (logger name)
+  meta:  '\x1b[90m',   // grey     (extra fields)
+}
+
+const LEVEL_LABEL = {
+  debug: 'DEBUG',
+  info:  ' INFO',
+  warn:  ' WARN',
+  error: 'ERROR',
+}
+
+function prettyPrint(level, name, message, extra) {
+  const c      = COLORS
+  const lc     = c[level] || c.info
+  const label  = LEVEL_LABEL[level] || level.toUpperCase()
+  const time   = new Date().toTimeString().slice(0, 8)
+
+  const parts = [
+    `${c.dim}${time}${c.reset}`,
+    `${lc}${c.bold}${label}${c.reset}`,
+    name ? `${c.label}[${name}]${c.reset}` : '',
+    `${lc}${message}${c.reset}`,
+  ].filter(Boolean).join(' ')
+
+  const metaStr = extra && Object.keys(extra).length
+    ? `\n  ${c.meta}${JSON.stringify(extra, null, 2).replace(/\n/g, '\n  ')}${c.reset}`
+    : ''
+
+  /* eslint-disable no-console */
+  const fn = level === 'error' ? console.error
+    : level === 'warn'  ? console.warn
+      : console.log
+  /* eslint-enable no-console */
+  fn(parts + metaStr)
+}
+
+export function createLogger(name, request) {
+  // Read env at call time (not module load time) so dotenv has already run.
+  const IS_PRETTY = process.env.LOG_FORMAT === 'pretty'
+    || (process.env.NODE_ENV !== 'production' && process.env.LOG_FORMAT !== 'json')
+  const minLevel = (process.env.LOG_LEVEL || 'info').toLowerCase()
+  const reqCtx   = filterRequest(request)
+
+  function emit(level, message, meta) {
+    if ((LEVEL_ORDER[level] ?? 1) < (LEVEL_ORDER[minLevel] ?? 1)) {
+      return
     }
 
     if (meta) {
       const safe = maskObject(meta)
-      if (typeof safe.email === 'string')    safe.email    = maskEmail(safe.email)
-      if (typeof safe.to_email === 'string') safe.to_email = maskEmail(safe.to_email)
-      Object.assign(entry, safe)
+      if (typeof safe.email    === 'string') {
+        safe.email    = maskEmail(safe.email)
+      }
+      if (typeof safe.to_email === 'string') {
+        safe.to_email = maskEmail(safe.to_email)
+      }
+      meta = safe
     }
 
+    if (IS_PRETTY) {
+      const extra = { ...reqCtx, ...meta }
+      prettyPrint(level, name, message, Object.keys(extra).length ? extra : null)
+      return
+    }
+
+    const entry = {
+      timestamp: new Date().toISOString(),
+      level,
+      ...(name    ? { logger: name } : {}),
+      ...reqCtx,
+      message,
+    }
+    if (meta) {
+      Object.assign(entry, meta)
+    }
+
+    /* eslint-disable no-console */
     const fn = level === 'error' ? console.error
-             : level === 'warn'  ? console.warn
-             : console.log
+      : level === 'warn'  ? console.warn
+        : console.log
+    /* eslint-enable no-console */
     fn(JSON.stringify(entry))
   }
 
-  /**
-   * Build a logger object with optional base meta.
-   * @param {Record<string, unknown>} [baseMeta]
-   */
-  function buildLogger(baseMeta = {}) {
-    const loggerObj = {
-      debug: (msg, meta) => emit('debug', msg, meta, baseMeta),
-      info:  (msg, meta) => emit('info',  msg, meta, baseMeta),
-      warn:  (msg, meta) => emit('warn',  msg, meta, baseMeta),
-      error: (msg, meta) => emit('error', msg, meta, baseMeta),
-
-      /**
-       * Create a child logger with persistent meta fields.
-       * @param {Record<string, unknown>} childMeta — e.g. { requestId, userId }
-       * @returns {{ info, warn, error, debug, child }}
-       */
-      child(childMeta) {
-        return buildLogger({ ...baseMeta, ...childMeta })
-      },
-    }
-    return loggerObj
+  return {
+    debug: (msg, meta) => emit('debug', msg, meta),
+    info:  (msg, meta) => emit('info',  msg, meta),
+    warn:  (msg, meta) => emit('warn',  msg, meta),
+    error: (msg, meta) => emit('error', msg, meta),
   }
-
-  return buildLogger()
 }
-
-// ═══════════════════════════════════════════════════════════════
-// UTILITY EXPORTS (for middleware / audit)
-// ═══════════════════════════════════════════════════════════════
-
-export { maskObject, maskEmail, maskValue, SENSITIVE_KEYS }

@@ -8,18 +8,64 @@
  */
 
 import { createLogger } from '../../../base/logger.js'
+import { createConnection } from '../../../base/db/createConnection.js'
+import { createClient } from '@supabase/supabase-js'
 const logger = createLogger('iam-service')
 import { INBOUND_KEYS, connectBus, consume, QUEUES, closeBus } from '../bus/rabbitmq.js'
-import { createInvitedAccount } from '../services/invite.js'
 import { hashNationalId } from '../lib/crypto.js'
-import {
-  getUserByRegistryId, updateUserEmail, updateUserStatus, disableUser,
-} from '../db/repository.js'
 import { invalidateUserCache } from '../lib/redis.js'
-import { pool } from '../db/pool.js'
+import { InviteService } from '../features/invite/inviteService.js'
 import type {
   CreateAuthAccountEvent, UserContactUpdatedEvent, UserDeletedEvent,
 } from '../types.js'
+
+// ── Worker DB connection (inside function so dotenv has loaded) ────────────
+let workerConnection: ReturnType<typeof createConnection>
+
+function getConnection() {
+  if (!workerConnection) {
+    if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('[YOUR_PASSWORD]')) {
+      workerConnection = createConnection({ connectionString: process.env.DATABASE_URL })
+    } else {
+      const supabaseClient = createClient(
+        (process.env.IAM_SUPABASE_URL || process.env.SUPABASE_URL)!,
+        (process.env.IAM_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)!,
+      )
+      workerConnection = createConnection({ supabaseClient })
+    }
+  }
+  return workerConnection
+}
+
+/** Create a minimal worker context (no HTTP request). */
+function createWorkerContext() {
+  const conn = getConnection()
+  return { connection: conn, user: null, request: null, response: null, logger: logger }
+}
+
+// ── Inline DB helpers for worker (no HTTP context needed) ──────────────────
+
+async function getUserByRegistryId(registryId: string) {
+  const result = await getConnection().query(
+    'SELECT * FROM users WHERE registry_id = $1 LIMIT 1',
+    [registryId],
+  )
+  return result.rows[0] ?? null
+}
+
+async function updateUserEmail(userId: string, email: string) {
+  await getConnection().query(
+    'UPDATE users SET email = $1, updated_at = NOW() WHERE user_id = $2',
+    [email, userId],
+  )
+}
+
+async function disableUser(userId: string) {
+  await getConnection().query(
+    "UPDATE users SET status = 'disabled', updated_at = NOW() WHERE user_id = $1",
+    [userId],
+  )
+}
 
 // ═══════════════════════════════════════════════════════════════
 // ROUTER — dispatch by routing key
@@ -63,11 +109,12 @@ async function handleCreateAuthAccount(event: CreateAuthAccountEvent): Promise<v
 
   try {
     const derivedHash = national_id_hash || (national_id ? hashNationalId(national_id) : undefined)
-    await createInvitedAccount({
+    const ctx           = createWorkerContext()
+    const inviteService = new InviteService(ctx as any)
+    await inviteService.createInvitedAccount({
       registryId: registry_id,
       email,
       nationalIdHash: derivedHash,
-      nationalId: national_id,
     })
   } catch (err) {
     logger.error('Failed to handle CREATE_AUTH_ACCOUNT', {
@@ -165,7 +212,7 @@ export async function startEventWorker(): Promise<void> {
 async function shutdown(): Promise<void> {
   logger.info('IAM event worker shutting down...')
   await closeBus()
-  await pool.end()
+  if (workerConnection) await workerConnection.end()
   process.exit(0)
 }
 

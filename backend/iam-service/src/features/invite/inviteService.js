@@ -4,21 +4,22 @@
  * Creates an IAM auth account for a registry member and sends an invitation.
  */
 
+import crypto from 'node:crypto'
 import { BaseService } from '../../../../base/baseService.js'
 import { config } from '../../config.js'
-import { createLogger } from '../../../../base/logger.js'
-const logger = createLogger('iam-service')
-import { generateOtp, hashOtp } from '../../lib/crypto.js'
 import { sendInviteEmail } from '../../lib/emailClient.js'
 import { cacheUserRegistryId } from '../../lib/redis.js'
 import { publishAuthAccountCreated } from '../../bus/rabbitmq.js'
 import { InviteRepository } from './inviteRepository.js'
 
 export class InviteService extends BaseService {
-  /** @param {InviteRepository} repo */
-  constructor(repo) {
-    super(repo.context)
-    this.repo = repo
+  /**
+   * @param {import('../../../../base/apiContext.js').ApiContext} ctx
+   * @param {import('./inviteRepository.js').InviteRepository} repo
+   */
+  constructor(context) {
+    super(context)
+    this.inviteRepository = new InviteRepository(context)
   }
 
   /**
@@ -26,42 +27,46 @@ export class InviteService extends BaseService {
    */
   async createInvitedAccount({ registryId, email, nationalIdHash }) {
     // Check for existing account
-    const existing = await this.repo.findByRegistryId(registryId)
+    const existing = await this.inviteRepository.findByRegistryId(registryId)
     if (existing) {
-      logger.info('Invite skipped — account already exists', { user_id: existing.user_id, registry_id: registryId })
+      this.log.info('Invite skipped — account already exists', { user_id: existing.user_id, registry_id: registryId })
       return { user_id: existing.user_id, message: 'Account already exists' }
     }
 
     // 1. Create local IAM user
-    const user = await this.repo.createUser({
+    const user = await this.inviteRepository.createUser({
       email,
       registryId,
       nationalIdHash,
       status: 'pending',
     })
 
-    // 2. Assign Citizen role
-    await this.repo.addRole(user.user_id, 'Citizen')
+    // 2. Assign Citizen role (skip if already assigned)
+    const isRoleExists = await this.inviteRepository.isUserRoleExists(user.user_id, 'Citizen')
+    if (!isRoleExists) {
+      await this.inviteRepository.insertUserRole(user.user_id, 'Citizen')
+    }
 
-    // 3. Generate invite OTP
-    const otp       = generateOtp()
-    const otpHash   = hashOtp(otp)
+    // 3. Generate invite token (cryptographically random, not predictable)
+    const rawToken  = crypto.randomBytes(48).toString('base64url')
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
     const expiresAt = new Date(Date.now() + config.otp.ttlMinutes * 60 * 1000)
 
-    await this.repo.createOtpToken({
+    await this.inviteRepository.createOtpToken({
+      id:          InviteService.generateUUID(),
       userId:      user.user_id,
-      otpHash,
+      otpHash:     tokenHash,
       purpose:     'invite',
       expiresAt,
-      maxAttempts: config.otp.maxAttempts,
+      maxAttempts: 1,
     })
 
-    // 4. Send invite email
-    const inviteLink = `${config.corsOrigin}/auth/setup?token=${user.user_id}`
+    // 4. Send invite email with the raw token (DB stores only the hash)
+    const inviteLink = `${config.corsOrigin}/auth/setup?token=${rawToken}`
     try {
       await sendInviteEmail({ to_email: email, invite_link: inviteLink })
     } catch {
-      logger.error('Failed to send invite email — Email Service down', { user_id: user.user_id, registry_id: registryId })
+      this.log.error('Failed to send invite email — Email Service down', { user_id: user.user_id, registry_id: registryId })
       // Degraded mode — account created but invite not sent
     }
 
@@ -71,7 +76,7 @@ export class InviteService extends BaseService {
     // 6. Publish event
     publishAuthAccountCreated({ user_id: user.user_id, registry_id: registryId, email })
 
-    logger.info('Invited account created', { user_id: user.user_id, registry_id: registryId })
+    this.log.info('Invited account created', { user_id: user.user_id, registry_id: registryId })
 
     return { user_id: user.user_id, message: 'Account created and invitation sent' }
   }

@@ -1,51 +1,38 @@
 import { createClient } from '@supabase/supabase-js'
 
-// ─── Programme Database Client ────────────────────────────────────────────────
-const programmeUrl = process.env.PROGRAMME_SUPABASE_URL
-const programmeServiceKey = process.env.PROGRAMME_SUPABASE_SERVICE_ROLE_KEY
+const supabaseUrl = process.env.PROGRAMME_SUPABASE_URL
+const supabaseKey = process.env.PROGRAMME_SUPABASE_SERVICE_ROLE_KEY
 
-if (!programmeUrl || !programmeServiceKey) {
-    console.warn('⚠️  Missing PROGRAMME_SUPABASE_URL / PROGRAMME_SUPABASE_SERVICE_ROLE_KEY — DB calls will fail')
+const familySupabaseUrl = process.env.FAMILY_SUPABASE_URL
+const familySupabaseKey = process.env.FAMILY_SUPABASE_SERVICE_ROLE_KEY
+
+if (!supabaseUrl || !supabaseKey) {
+  console.warn('⚠️  Missing PROGRAMME_SUPABASE_URL / PROGRAMME_SUPABASE_SERVICE_ROLE_KEY')
 }
 
-/** Supabase client for programme schema */
-export const supabase = (programmeUrl && programmeServiceKey)
-    ? createClient(programmeUrl, programmeServiceKey, {
-    auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-    },
-    db: {
-        schema: 'programme',
-    },
-})
-    : (null as any)
-
-// ─── Family Database Client (read-only cross-service access) ──────────────────
-const familyUrl = process.env.FAMILY_SUPABASE_URL
-const familyServiceKey = process.env.FAMILY_SUPABASE_SERVICE_ROLE_KEY
-
-if (!familyUrl || !familyServiceKey) {
-    console.warn('⚠️  Missing Family Supabase env vars — rule engine family data lookup will fail')
-}
-
-/** Supabase client for family schema (read-only, used by rule engine) */
-export const familySupabase = familyUrl && familyServiceKey
-    ? createClient(familyUrl, familyServiceKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-        db: { schema: 'family' },
+/**
+ * Standalone Supabase client for programme-service.
+ * Targets the 'programme' schema where all programme tables live.
+ * Used only by code that needs direct Supabase access outside the
+ * connection/repository layer (e.g. ruleEngine.ts, variableCatalog.ts).
+ *
+ * DB connection for repositories is handled by createConnection() in api.js.
+ */
+export const supabase = (supabaseUrl && supabaseKey)
+  ? createClient(supabaseUrl, supabaseKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+      db: { schema: 'programme' },
     })
-    : null
+  : (null as any)
 
-// Test programme database connection
-export async function testConnection(): Promise<{ success: boolean; error?: string }> {
-    try {
-        const { error } = await supabase.from('programme_master').select('programme_id').limit(1)
-        if (error) {
-            return { success: false, error: error.message }
-        }
-        return { success: true }
-    } catch (err: unknown) {
-        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' }
-    }
-}
+/**
+ * Supabase client for the family database.
+ * Used by customFieldManager (ALTER TABLE) and ruleEngine (data fetching).
+ * Targets the 'family' schema where family/member/address tables live.
+ */
+export const familySupabase = (familySupabaseUrl && familySupabaseKey)
+  ? createClient(familySupabaseUrl, familySupabaseKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+      db: { schema: 'family' },
+    })
+  : (null as any)

@@ -1,4 +1,5 @@
 import { ApiContext } from './apiContext.js'
+import { v4 as uuidv4 } from 'uuid'
 
 /**
  * BaseService — auth helpers shared across all service classes.
@@ -13,15 +14,22 @@ export class BaseService {
     this.log     = context.logger
   }
 
-  /** Generate a UUID (uses built-in crypto — no npm package needed) */
-  static genUUID() {
-    return crypto.randomUUID()
+  /**
+   * Generate a UUID v4 in UPPERCASE.
+   * Always use this in service layer for primary key generation.
+   * Never use crypto.randomUUID(), uuidv4() directly, or any UUID generation in repositories.
+   * @returns {string} UUID v4 in UPPERCASE — e.g. '550E8400-E29B-41D4-A716-446655440000'
+   */
+  static generateUUID() {
+    return uuidv4().toUpperCase()
   }
 
   /** Return the current user's subject id, or throw if unauthenticated */
   getUserId() {
     const sub = this.context.user?.sub
-    if (!sub) throw new Error('User not authenticated')
+    if (!sub) {
+      throw new Error('User not authenticated')
+    }
     return sub
   }
 

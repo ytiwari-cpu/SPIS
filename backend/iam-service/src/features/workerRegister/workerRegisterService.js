@@ -8,21 +8,23 @@
 
 import bcrypt from 'bcrypt'
 import { BaseService } from '../../../../base/baseService.js'
-import { createLogger } from '../../../../base/logger.js'
-const logger = createLogger('iam-service')
+import { ApplicationError } from '../../../../base/applicationError.js'
 import { hashNationalId, generateOtp, hashOtp, verifyOtp } from '../../lib/crypto.js'
 import { sendOtpEmail } from '../../lib/emailClient.js'
 import { WorkerRegisterRepository } from './workerRegisterRepository.js'
 
-const WORKER_REGISTRATION_KEY = "j'F-7cU&uRM&_0dJ`x0.&\"m[.~7E8SPk`8C!Es@d"
+const WORKER_REGISTRATION_KEY = process.env.WORKER_REGISTRATION_SECRET
 const OTP_EXPIRY_MS            = 10 * 60 * 1000
-const VALID_ROLES              = ['Admin', 'CaseWorker', 'SuperAdmin', 'ProgrammeManager']
+const VALID_ROLES              = ['Admin', 'CaseWorker', 'ProgrammeManager']
 
 export class WorkerRegisterService extends BaseService {
-  /** @param {WorkerRegisterRepository} repo */
-  constructor(repo) {
-    super(repo.context)
-    this.repo = repo
+  /**
+   * @param {import('../../../../base/apiContext.js').ApiContext} ctx
+   * @param {import('./workerRegisterRepository.js').WorkerRegisterRepository} repo
+   */
+  constructor(context) {
+    super(context)
+    this.workerRegisterRepository = new WorkerRegisterRepository(context)
   }
 
   /**
@@ -30,40 +32,32 @@ export class WorkerRegisterService extends BaseService {
    */
   async register({ national_id, email, role, secret_key }) {
     if (!national_id || !email || !role || !secret_key) {
-      throw Object.assign(
-        new Error('National ID, email, role, and secret key are required'),
-        { statusCode: 400, code: 'INVALID_INPUT' },
-      )
+      throw ApplicationError.create(400, { message: 'National ID, email, role, and secret key are required', code: 'INVALID_INPUT' })
     }
     if (secret_key !== WORKER_REGISTRATION_KEY) {
-      logger.warn('Worker registration failed: invalid secret key', { email })
-      throw Object.assign(new Error('Invalid secret key'), { statusCode: 403, code: 'INVALID_KEY' })
+      this.log.warn('Worker registration failed: invalid secret key', { email })
+      throw ApplicationError.create(403, { message: 'Invalid secret key', code: 'INVALID_KEY' })
     }
     if (!VALID_ROLES.includes(role)) {
-      throw Object.assign(
-        new Error('Role must be Admin, CaseWorker, SuperAdmin, or ProgrammeManager'),
-        { statusCode: 400, code: 'INVALID_ROLE' },
-      )
+      throw ApplicationError.create(400, { message: 'Role must be Admin, CaseWorker, or ProgrammeManager', code: 'INVALID_ROLE' })
     }
 
     const nationalIdHash = hashNationalId(national_id)
-    const existing       = await this.repo.findByNationalIdHash(nationalIdHash)
+    const existing       = await this.workerRegisterRepository.findByNationalIdHash(nationalIdHash)
     if (existing) {
-      throw Object.assign(
-        new Error('User with this National ID already exists'),
-        { statusCode: 409, code: 'USER_EXISTS' },
-      )
+      throw ApplicationError.create(409, { message: 'User with this National ID already exists', code: 'USER_EXISTS' })
     }
 
-    const tempUser  = await this.repo.createUser({ email, nationalIdHash, status: 'pending' })
+    const userId   = WorkerRegisterService.generateUUID()
+    await this.workerRegisterRepository.createUser({ user_id: userId, email, national_id_hash: nationalIdHash, status: 'pending' })
     const otp       = generateOtp()
     const otpHash   = hashOtp(otp)
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS)
 
-    await this.repo.createOtpToken({ userId: tempUser.user_id, otpHash, purpose: 'worker_registration', expiresAt })
+    await this.workerRegisterRepository.createOtpToken({ id: WorkerRegisterService.generateUUID(), userId, otpHash, purpose: 'worker_registration', expiresAt })
     await sendOtpEmail({ to_email: email, otp_code: otp, expires_at: expiresAt.toISOString(), purpose: 'Worker Registration' })
 
-    logger.info('Worker registration OTP sent', { email, role })
+    this.log.info('Worker registration OTP sent', { email, role })
     return { message: 'OTP sent to your email. Please verify to complete registration.', email }
   }
 
@@ -72,39 +66,38 @@ export class WorkerRegisterService extends BaseService {
    */
   async verify({ national_id, email, role, otp, password }) {
     if (!national_id || !email || !role || !otp || !password) {
-      throw Object.assign(
-        new Error('National ID, email, role, OTP, and password are required'),
-        { statusCode: 400, code: 'INVALID_INPUT' },
-      )
+      throw ApplicationError.create(400, { message: 'National ID, email, role, OTP, and password are required', code: 'INVALID_INPUT' })
     }
     if (password.length < 8) {
-      throw Object.assign(new Error('Password must be at least 8 characters'), { statusCode: 400, code: 'WEAK_PASSWORD' })
+      throw ApplicationError.create(400, { message: 'Password must be at least 8 characters', code: 'WEAK_PASSWORD' })
     }
 
     const nationalIdHash = hashNationalId(national_id)
-    const tempUser       = await this.repo.findByNationalIdHash(nationalIdHash)
+    const tempUser       = await this.workerRegisterRepository.findByNationalIdHash(nationalIdHash)
     if (!tempUser) {
-      throw Object.assign(
-        new Error('Registration session not found. Please start registration again.'),
-        { statusCode: 400, code: 'USER_NOT_FOUND' },
-      )
+      throw ApplicationError.create(400, { message: 'Registration session not found. Please start registration again.', code: 'USER_NOT_FOUND' })
     }
 
-    const otpToken = await this.repo.getActiveOtpToken(tempUser.user_id, 'worker_registration')
+    const otpToken = await this.workerRegisterRepository.getActiveOtpToken(tempUser.user_id, 'worker_registration')
     if (!otpToken) {
-      throw Object.assign(new Error('Invalid or expired OTP'), { statusCode: 400, code: 'INVALID_OTP' })
+      throw ApplicationError.create(400, { message: 'Invalid or expired OTP', code: 'INVALID_OTP' })
     }
     if (!verifyOtp(otp, otpToken.otp_hash)) {
-      throw Object.assign(new Error('Invalid OTP code'), { statusCode: 400, code: 'INVALID_OTP' })
+      throw ApplicationError.create(400, { message: 'Invalid OTP code', code: 'INVALID_OTP' })
     }
 
     const passwordHash = await bcrypt.hash(password, 10)
-    await this.repo.updatePassword(tempUser.user_id, passwordHash)
-    await this.repo.updateStatus(tempUser.user_id, 'active')
-    await this.repo.addRole(tempUser.user_id, role)
-    await this.repo.markOtpUsed(otpToken.id)
+    await this.workerRegisterRepository.updatePassword(tempUser.user_id, {
+      password_hash: passwordHash, updated_at: new Date().toISOString(),
+    })
+    await this.workerRegisterRepository.updateStatus(tempUser.user_id, 'active')
+    const isRoleExists = await this.workerRegisterRepository.isUserRoleExists(tempUser.user_id, role)
+    if (!isRoleExists) {
+      await this.workerRegisterRepository.insertUserRole(tempUser.user_id, role)
+    }
+    await this.workerRegisterRepository.markOtpUsed(otpToken.id)
 
-    logger.info('Worker registered successfully', { userId: tempUser.user_id, email, role })
+    this.log.info('Worker registered successfully', { userId: tempUser.user_id, email, role })
     return { message: 'Worker account created successfully. You can now login.', user_id: tempUser.user_id, email, role }
   }
 }

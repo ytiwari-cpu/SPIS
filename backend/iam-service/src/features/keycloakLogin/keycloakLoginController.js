@@ -2,30 +2,30 @@
  * KeycloakLoginController — handles /iam/keycloak/login routes
  */
 
-import { BaseController } from '../../../../base/baseController.js'
-import { loginWithKeycloak } from '../../services/keycloakLogin.js'
+import { BaseController }          from '../../../../base/baseController.js'
+import { KeycloakLoginService }    from './keycloakLoginService.js'
 
 export class KeycloakLoginController extends BaseController {
-  constructor(ctx) {
-    super(ctx)
+  constructor(context) {
+    super(context)
+    this.keycloakLoginService = new KeycloakLoginService(context)
   }
 
   /**
    * POST /iam/keycloak/login
    * Authenticate user via Keycloak ROPC and return RS256 JWT.
+   * IP/userAgent extracted in service via this.context.request.
    */
-  async login() {
-    const { national_id, password } = this.context.req.body
+  async login(body) {
+    const { national_id, password } = body
 
     // Clean national_id (digits only)
     const cleanNationalId = national_id.replaceAll(/\D/g, '')
 
     try {
-      const result = await loginWithKeycloak({
+      const result = await this.keycloakLoginService.loginWithKeycloak({
         nationalId: cleanNationalId,
         password,
-        ip: this.context.req.headers['x-forwarded-for'] || this.context.req.socket?.remoteAddress || 'unknown',
-        userAgent: this.context.req.headers['user-agent'] || 'unknown',
       })
 
       this.respondOk({ success: true, data: result })
@@ -41,7 +41,7 @@ export class KeycloakLoginController extends BaseController {
 
       this.respondJson({
         success: false,
-        error: {
+        error:   {
           code: statusCode === 401 ? 'INVALID_CREDENTIALS' : 'LOGIN_ERROR',
           message,
         },
@@ -57,13 +57,13 @@ export class KeycloakLoginController extends BaseController {
     const keycloakBase = process.env.KEYCLOAK_BASE_URL || 'http://localhost:8080'
     const realm = process.env.KEYCLOAK_REALM || 'spis-dev'
 
-    this.respondOk({
+    await this.respondOk({
       success: true,
-      data: {
+      data:    {
         description: 'Keycloak RS256 JWT verification info',
-        jwks_uri: `${keycloakBase}/realms/${realm}/protocol/openid-connect/certs`,
-        issuer: `${keycloakBase}/realms/${realm}`,
-        algorithm: 'RS256',
+        jwks_uri:    `${keycloakBase}/realms/${realm}/protocol/openid-connect/certs`,
+        issuer:      `${keycloakBase}/realms/${realm}`,
+        algorithm:   'RS256',
         explanation: {
           step1: 'Keycloak signs tokens with PRIVATE KEY (stored in Keycloak)',
           step2: 'Backend fetches PUBLIC KEYS from JWKS endpoint',

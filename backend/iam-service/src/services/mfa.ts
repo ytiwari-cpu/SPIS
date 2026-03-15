@@ -8,6 +8,7 @@
 import * as OTPAuth from 'otpauth'
 import * as QRCode from 'qrcode'
 import { config } from '../config.js'
+import { ApplicationError } from '../../../base/applicationError.js'
 import { createLogger } from '../../../base/logger.js'
 const logger = createLogger('iam-service')
 import { generateOtp, hashOtp, verifyOtp, generateTotpSecret } from '../lib/crypto.js'
@@ -31,7 +32,7 @@ import type { TotpEnrollResponse, OtpPurpose } from '../types.js'
  */
 export async function enrollTotp(userId: string): Promise<TotpEnrollResponse> {
   const user = await getUserById(userId)
-  if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 })
+  if (!user) throw ApplicationError.notFound('User not found')
 
   // Generate secret
   const hexSecret = generateTotpSecret()
@@ -72,13 +73,13 @@ export async function enrollTotp(userId: string): Promise<TotpEnrollResponse> {
  */
 export async function verifyTotpEnrollment(userId: string, code: string): Promise<{ message: string }> {
   const user = await getUserById(userId)
-  if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 })
+  if (!user) throw ApplicationError.notFound('User not found')
 
   // Get pending TOTP factor
   const factors = await getMfaFactors(userId)
   const pendingTotp = factors.find(f => f.factor_type === 'totp' && f.status === 'pending')
   if (!pendingTotp || !pendingTotp.secret) {
-    throw Object.assign(new Error('No pending TOTP enrollment found'), { statusCode: 400 })
+    throw ApplicationError.badRequest('No pending TOTP enrollment found')
   }
 
   // Verify the code
@@ -93,7 +94,7 @@ export async function verifyTotpEnrollment(userId: string, code: string): Promis
 
   const delta = totp.validate({ token: code, window: 1 })
   if (delta === null) {
-    throw Object.assign(new Error('Invalid TOTP code'), { statusCode: 400 })
+    throw ApplicationError.badRequest('Invalid TOTP code')
   }
 
   // Activate factor
@@ -140,7 +141,7 @@ export async function validateTotpCode(userId: string, code: string): Promise<bo
  */
 export async function sendEmailOtp(userId: string, purpose: OtpPurpose): Promise<{ message: string }> {
   const user = await getUserById(userId)
-  if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 })
+  if (!user) throw ApplicationError.notFound('User not found')
 
   const otp = generateOtp()
   const otpHash = hashOtp(otp)
@@ -172,10 +173,7 @@ export async function sendEmailOtp(userId: string, purpose: OtpPurpose): Promise
       expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 minutes
     })
   } catch {
-    throw Object.assign(
-      new Error('Email Service unavailable — please try again later'),
-      { statusCode: 503 },
-    )
+    throw ApplicationError.serviceUnavailable('Email Service unavailable — please try again later')
   }
 
   logger.info('Email OTP sent', { user_id: userId, purpose })

@@ -4,42 +4,24 @@
  * Wraps request, response, user, and logger into a single object
  * passed to all controllers, services, and repositories.
  *
- * Enhanced:
- *   - requestId propagation (from middleware or header)
- *   - Structured logger child with requestId + userId embedded
- *
  * Plain JavaScript — no TypeScript required.
  */
 
-import crypto from 'node:crypto'
-
-const defaultLogger = {
-  info:  (msg, meta) => console.log(`[INFO]  ${msg}`, meta ?? ''),
-  warn:  (msg, meta) => console.warn(`[WARN]  ${msg}`, meta ?? ''),
-  error: (msg, meta) => console.error(`[ERROR] ${msg}`, meta ?? ''),
-  debug: (msg, meta) => console.debug(`[DEBUG] ${msg}`, meta ?? ''),
-  child: () => defaultLogger,
-}
+import { createLogger } from './logger.js'
 
 export class ApiContext {
   /**
    * @param {import('express').Request} request
-   * @param {import('express').Response} response
-   * @param {object} [logger]  — structured logger (from createLogger)
+   * @param {object} connection — pg-compatible DB connection from createConnection()
+   * @param {Record<string, unknown>} [extras] — additional per-service resources (familyConnection, etc.)
    */
-  constructor(request, response, logger) {
-    this.request   = request
-    this.response  = response
-    this.req       = request           // alias for controllers using ctx.req
-    this.res       = response          // alias for controllers using ctx.res
-    this.user      = request.user      // attached by requireAuth middleware
-    this.requestId = request.requestId || request.headers?.['x-request-id'] || crypto.randomUUID()
-
-    // Create a child logger with requestId + userId embedded in every log line
-    const baseLogger = logger ?? defaultLogger
-    this.logger = typeof baseLogger.child === 'function'
-      ? baseLogger.child({ requestId: this.requestId, userId: this.user?.sub })
-      : baseLogger
+  constructor(request, connection, extras = {}) {
+    this.request    = request
+    this.response   = request.res      // Express sets req.res internally
+    this.user       = request.user     // attached by requireAuth middleware
+    this.connection = connection
+    this.logger     = createLogger('ApiContext', request)
+    this.extras     = extras
   }
 
   get cookies() {

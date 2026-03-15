@@ -4,6 +4,7 @@ import { useAuthStore } from '@/store/authStore'
 import { authApi } from '@/services/familyApi'
 import { extractApiError } from '@/services/authFetch'
 import WorkerRegistrationModal from '@/components/WorkerRegistrationModal'
+import { useToast } from '@/components/ui/Toast'
 
 function normalizeNationalId(value: string): string {
   return value.replace(/\D/g, '')
@@ -12,6 +13,7 @@ function normalizeNationalId(value: string): string {
 export default function LoginPageContent() {
   const navigate = useNavigate()
   const { login, isAuthenticated, setFamilyDetails } = useAuthStore()
+  const { toast } = useToast()
 
   const [loginMode, setLoginMode] = useState<'password' | 'otp'>('password')
   const [nationalId, setNationalId] = useState('')
@@ -91,18 +93,45 @@ export default function LoginPageContent() {
       if (response.success && response.data) {
         await finalizeLogin(response.data)
       } else {
-        setError(extractApiError(response.error, 'Login failed'))
+        toast.error(extractApiError(response.error, 'Login failed'))
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error'
-      if (message.includes('401')) {
-        setError('Invalid credentials. If you haven\'t set a password yet, use "Forgot password?" below.')
-      } else if (message.includes('404')) {
-        setError('User not found. Please register or reset your password first.')
-      } else if (message.includes('403')) {
-        setError('Account not activated. Please reset your password first.')
+      // Axios errors carry response.data with the server's JSON body
+      const axiosErr = err as {
+        response?: {
+          status?: number
+          data?: { error?: { message?: string; code?: string; details?: { locked_until?: string } } }
+        }
+        message?: string
+      }
+      const status = axiosErr.response?.status
+      const serverError = axiosErr.response?.data?.error
+      const serverMessage = serverError?.message
+
+      if (status === 423 || status === 429 || serverError?.code === 'ACCOUNT_LOCKED') {
+        // Show real locked-account error with remaining time
+        const lockedUntil = serverError?.details?.locked_until
+        if (lockedUntil) {
+          const msLeft = new Date(lockedUntil).getTime() - Date.now()
+          const minutesLeft = Math.max(1, Math.ceil(msLeft / 60000))
+          toast.error(
+            `Your account is locked. Try again in ${minutesLeft} minute${minutesLeft !== 1 ? 's' : ''}.`,
+            10000,
+          )
+        } else {
+          toast.error(
+            serverMessage || 'Account is temporarily locked. Please use OTP login or try again later.',
+            10000,
+          )
+        }
+      } else if (status === 401) {
+        toast.error(serverMessage || 'Invalid credentials. Please check your National ID and password.')
+      } else if (status === 403) {
+        toast.error(serverMessage || 'Account not activated. Please reset your password first.')
+      } else if (status === 404) {
+        toast.error(serverMessage || 'User not found. Please register or reset your password first.')
       } else {
-        setError(`Login failed: ${message}`)
+        toast.error(serverMessage || (err instanceof Error ? err.message : 'Login failed. Please try again.'))
       }
     } finally {
       setIsLoading(false)
@@ -130,13 +159,15 @@ export default function LoginPageContent() {
         setError(extractApiError(response.error, 'Failed to send OTP'))
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error'
-      if (message.includes('404')) {
-        setError('National ID not found in system')
-      } else if (message.includes('409')) {
-        setError('No email registered for this National ID')
+      const axiosErr = err as { response?: { status?: number; data?: { error?: { message?: string } } }; message?: string }
+      const status = axiosErr.response?.status
+      const serverMessage = axiosErr.response?.data?.error?.message
+      if (status === 404) {
+        toast.error(serverMessage || 'National ID not found in system')
+      } else if (status === 409) {
+        toast.error(serverMessage || 'No email registered for this National ID')
       } else {
-        setError(`Failed to send OTP: ${message}`)
+        toast.error(serverMessage || `Failed to send OTP: ${err instanceof Error ? err.message : 'Unknown error'}`)
       }
     } finally {
       setIsLoading(false)
@@ -166,16 +197,18 @@ export default function LoginPageContent() {
       if (response.success && response.data) {
         await finalizeLogin(response.data)
       } else {
-        setError(extractApiError(response.error, 'OTP verification failed'))
+        toast.error(extractApiError(response.error, 'OTP verification failed'))
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error'
-      if (message.includes('400')) {
-        setError('Invalid OTP code. Please try again.')
-      } else if (message.includes('429')) {
-        setError('Too many attempts. Please request a new OTP.')
+      const axiosErr = err as { response?: { status?: number; data?: { error?: { message?: string } } }; message?: string }
+      const status = axiosErr.response?.status
+      const serverMessage = axiosErr.response?.data?.error?.message
+      if (status === 400) {
+        toast.error(serverMessage || 'Invalid OTP code. Please try again.')
+      } else if (status === 429) {
+        toast.error(serverMessage || 'Too many attempts. Please request a new OTP.')
       } else {
-        setError(`OTP verification failed: ${message}`)
+        toast.error(serverMessage || `OTP verification failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
       }
     } finally {
       setIsLoading(false)

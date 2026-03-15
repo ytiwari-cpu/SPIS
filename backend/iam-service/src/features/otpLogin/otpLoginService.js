@@ -6,21 +6,24 @@
  * Step 2: verifyOtp  — verify OTP, activate user if pending, issue JWT.
  */
 
-import { SignJWT } from 'jose'
 import { BaseService } from '../../../../base/baseService.js'
+import { ApplicationError } from '../../../../base/applicationError.js'
+import { signToken } from '../../../../base/auth/signToken.js'
 import { config } from '../../config.js'
-import { createLogger } from '../../../../base/logger.js'
-const logger = createLogger('iam-service')
 import { generateOtp, hashOtp, verifyOtp, hashNationalId } from '../../lib/crypto.js'
 import { sendOtpEmail } from '../../lib/emailClient.js'
 import { lookupByNationalId } from '../../lib/registryClient.js'
 import { OtpLoginRepository } from './otpLoginRepository.js'
 
 export class OtpLoginService extends BaseService {
-  /** @param {OtpLoginRepository} repo */
-  constructor(repo) {
-    super(repo.context)
-    this.repo = repo
+  /**
+   * @param {import('../../../../base/apiContext.js').ApiContext} ctx
+   * @param {import('./otpLoginRepository.js').OtpLoginRepository} repo
+   */
+  constructor(context) {
+    super(context)
+    this.request = context.request
+    this.otpLoginRepository = new OtpLoginRepository(context)
   }
 
   /**
@@ -29,33 +32,39 @@ export class OtpLoginService extends BaseService {
    */
   async requestOtp(nationalId) {
     const nationalIdHash = hashNationalId(nationalId)
-    let user = await this.repo.findByNationalIdHash(nationalIdHash)
-    let userExistsInIam = !!user
+    let user = await this.otpLoginRepository.findByNationalIdHash(nationalIdHash)
+    const userExistsInIam = !!user
     let email = null
 
     if (user) {
       email = user.email
-      logger.info('OTP login request - user found in IAM', { user_id: user.user_id })
+      this.log.info('OTP login request - user found in IAM', { user_id: user.user_id })
     } else {
       // Look up in Registry (family_member)
       const registryResult = await lookupByNationalId(nationalId)
       if (!registryResult) {
-        throw Object.assign(new Error('National ID not found in system'), { statusCode: 404 })
+        throw ApplicationError.notFound('National ID not found in system')
       }
       email = registryResult.email
       if (!email) {
-        throw Object.assign(new Error('No email registered for this national ID'), { statusCode: 409 })
+        throw ApplicationError.conflict('No email registered for this national ID')
       }
 
       // Create pending user
-      user = await this.repo.createUser({
+      const userId = OtpLoginService.generateUUID()
+      await this.otpLoginRepository.createUser({
+        user_id:          userId,
         email,
-        registryId:     registryResult.registry_id || undefined,
-        nationalIdHash,
-        status:         'pending',
+        registry_id:      registryResult.registry_id || null,
+        national_id_hash: nationalIdHash,
+        status:           'pending',
       })
-      await this.repo.addRole(user.user_id, 'Citizen')
-      logger.info('OTP login request - pending user created from Registry', { user_id: user.user_id })
+      user = { user_id: userId, email, status: 'pending' }
+      const isRoleExists = await this.otpLoginRepository.isUserRoleExists(user.user_id, 'Citizen')
+      if (!isRoleExists) {
+        await this.otpLoginRepository.insertUserRole(user.user_id, 'Citizen')
+      }
+      this.log.info('OTP login request - pending user created from Registry', { user_id: user.user_id })
     }
 
     // Generate + store OTP
@@ -63,7 +72,9 @@ export class OtpLoginService extends BaseService {
     const otpHash   = hashOtp(otp)
     const expiresAt = new Date(Date.now() + config.otp.ttlMinutes * 60 * 1000)
 
-    const token = await this.repo.createOtpToken({
+    const tokenId = OtpLoginService.generateUUID()
+    await this.otpLoginRepository.createOtpToken({
+      id:          tokenId,
       userId:      user.user_id,
       otpHash,
       purpose:     'otp_login',
@@ -75,14 +86,14 @@ export class OtpLoginService extends BaseService {
     try {
       await sendOtpEmail({ to_email: email, otp_code: otp, expires_at: expiresAt.toISOString(), purpose: 'login' })
     } catch {
-      throw Object.assign(new Error('Email Service unavailable — please try again later'), { statusCode: 503 })
+      throw ApplicationError.serviceUnavailable('Email Service unavailable — please try again later')
     }
 
-    logger.info('OTP login request sent', { user_id: user.user_id, otp_id: token.id })
+    this.log.info('OTP login request sent', { user_id: user.user_id, otp_id: tokenId })
 
     return {
       message:            'OTP sent to your registered email address',
-      otp_id:             token.id,
+      otp_id:             tokenId,
       user_exists_in_iam: userExistsInIam,
     }
   }
@@ -92,58 +103,53 @@ export class OtpLoginService extends BaseService {
    */
   async verifyOtp({ nationalId, otp, ip, userAgent }) {
     const nationalIdHash = hashNationalId(nationalId)
-    const user = await this.repo.findByNationalIdHash(nationalIdHash)
+    const user = await this.otpLoginRepository.findByNationalIdHash(nationalIdHash)
 
     if (!user) {
-      throw Object.assign(new Error('No OTP login in progress for this national ID'), { statusCode: 404 })
+      throw ApplicationError.notFound('No OTP login in progress for this national ID')
     }
 
-    const token = await this.repo.getActiveOtpToken(user.user_id, 'otp_login')
+    const token = await this.otpLoginRepository.getActiveOtpToken(user.user_id, 'otp_login')
     if (!token) {
-      throw Object.assign(new Error('OTP expired or not found — please request a new one'), { statusCode: 400 })
+      throw ApplicationError.badRequest('OTP expired or not found — please request a new one')
     }
 
-    const attempts = await this.repo.incrementOtpAttempt(token.id)
+    const attempts = await this.otpLoginRepository.incrementOtpAttempt(token.id)
     if (attempts > token.max_attempts) {
-      throw Object.assign(new Error('Maximum OTP attempts exceeded — please request a new code'), { statusCode: 429 })
+      throw ApplicationError.tooManyRequests('Maximum OTP attempts exceeded — please request a new code')
     }
 
     if (!verifyOtp(otp, token.otp_hash)) {
       const remaining = token.max_attempts - attempts
-      throw Object.assign(new Error(`Invalid OTP code. ${remaining} attempt(s) remaining.`), { statusCode: 400 })
+      throw ApplicationError.badRequest(`Invalid OTP code. ${remaining} attempt(s) remaining.`)
     }
 
-    await this.repo.markOtpUsed(token.id)
+    await this.otpLoginRepository.markOtpUsed(token.id)
 
     const isNewUser = user.status === 'pending'
-    if (isNewUser) {
-      await this.repo.updateStatus(user.user_id, 'active')
+    // Activate pending users; unlock locked/disabled accounts so password login works again
+    if (isNewUser || user.status === 'locked' || user.status === 'disabled') {
+      await this.otpLoginRepository.updateStatus(user.user_id, 'active')
     }
+    // Always reset failed login counter and lock timer on successful OTP login
+    await this.otpLoginRepository.unlockUser(user.user_id)
 
-    const roleRows    = await this.repo.getRoles(user.user_id)
+    const roleRows    = await this.otpLoginRepository.getRoles(user.user_id)
     const roles       = roleRows.map(r => r.role_name)
-    const permissions = await this.repo.getPermissions(user.user_id)
+    const permissions = await this.otpLoginRepository.getPermissions(user.user_id)
 
-    // Issue JWT
-    const secret   = new TextEncoder().encode(config.jwt.secret)
-    const jwtToken = await new SignJWT({
-      sub:         user.user_id,
-      email:       user.email,
-      national_id: nationalId,
-      roles,
-      permissions,
-      registry_id: user.registry_id || undefined,
-    })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setIssuedAt()
-      .setIssuer(config.jwt.issuer)
-      .setAudience(config.jwt.audience)
-      .setExpirationTime(`${config.jwt.expiresInSeconds}s`)
-      .sign(secret)
+    // Issue JWT (national_id intentionally omitted — PII, never in JWT)
+    const jwtToken = await signToken(
+      { userId: user.user_id, email: user.email, roles, permissions, registryId: user.registry_id || undefined },
+      {
+        secret: config.jwt.secret, expiresInSeconds: config.jwt.expiresInSeconds,
+        issuer: config.jwt.issuer, audience: config.jwt.audience,
+      },
+    )
 
-    await this.repo.recordEvent({ userId: user.user_id, ip, userAgent, outcome: 'success' })
+    await this.otpLoginRepository.recordEvent({ userId: user.user_id, ip, userAgent, outcome: 'success' })
 
-    logger.info('OTP login successful', { user_id: user.user_id, is_new_user: isNewUser })
+    this.log.info('OTP login successful', { user_id: user.user_id, is_new_user: isNewUser })
 
     return {
       access_token: jwtToken,

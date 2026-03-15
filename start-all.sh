@@ -24,6 +24,13 @@ cd "$SCRIPT_DIR"
 
 mkdir -p logs
 
+# Clear previous log files so tail -f always shows the full boot sequence
+> logs/family-service.log
+> logs/email-service.log
+> logs/email-worker.log
+> logs/iam-service.log
+> logs/programme-service.log
+
 echo "🚀 Starting SPIS — full stack"
 echo ""
 
@@ -108,4 +115,4 @@ echo "📝 All backend logs: ./logs/"
 echo "🛑 To stop everything: ./stop-all.sh"
 echo ""
 echo "─────────────────── Live Logs ────────────────────────"
-tail -f logs/iam-service.log logs/family-service.log logs/email-service.log logs/programme-service.log
+tail -n +1 -f logs/iam-service.log logs/family-service.log logs/email-service.log logs/programme-service.log

@@ -49,9 +49,13 @@ export { QueryHelper } from '../base/queryHelper.js'
  * @returns {string}
  */
 export function quoteIdentifier(name) {
-  if (!name || typeof name !== 'string') return '""'
+  if (!name || typeof name !== 'string') {
+    return '""'
+  }
   // Don't re-quote already quoted or schema-qualified identifiers
-  if (name.includes('"') || name.includes('(') || name === '*') return name
+  if (name.includes('"') || name.includes('(') || name === '*') {
+    return name
+  }
   // Handle schema.table or table.column
   if (name.includes('.')) {
     return name.split('.').map(p => p === '*' ? '*' : `"${p.replace(/"/g, '""')}"`).join('.')
@@ -65,8 +69,12 @@ export function quoteIdentifier(name) {
  * @returns {string}
  */
 export function escapeValue(val) {
-  if (val === null || val === undefined) return 'NULL'
-  if (typeof val === 'number' || typeof val === 'boolean') return String(val)
+  if (val === null || val === undefined) {
+    return 'NULL'
+  }
+  if (typeof val === 'number' || typeof val === 'boolean') {
+    return String(val)
+  }
   return `'${String(val).replace(/'/g, "''")}'`
 }
 
@@ -115,7 +123,9 @@ class BaseQuery {
    * @returns {{ clause: string, values: unknown[], nextIdx: number }}
    */
   _buildWhere(startIdx) {
-    if (this._wheres.length === 0) return { clause: '', values: [], nextIdx: startIdx }
+    if (this._wheres.length === 0) {
+      return { clause: '', values: [], nextIdx: startIdx }
+    }
 
     const parts = []
     const allValues = []
@@ -179,7 +189,9 @@ class SelectQuery extends BaseQuery {
 
   /** Add multiple fields. @param {string[]} fieldList */
   fields(fieldList) {
-    for (const f of fieldList) this._fields.push(f)
+    for (const f of fieldList) {
+      this._fields.push(f)
+    }
     return this
   }
 
@@ -252,19 +264,29 @@ class SelectQuery extends BaseQuery {
     }
 
     // WHERE
-    const { clause: whereClause, values: whereValues, nextIdx } = this._buildWhere(1)
+    const { clause: whereClause, values: whereValues } = this._buildWhere(1)
     sql += whereClause
 
     // GROUP BY
-    if (this._groupBy) sql += ` GROUP BY ${this._groupBy}`
-    if (this._having)  sql += ` HAVING ${this._having}`
+    if (this._groupBy) {
+      sql += ` GROUP BY ${this._groupBy}`
+    }
+    if (this._having)  {
+      sql += ` HAVING ${this._having}`
+    }
 
     // ORDER BY
-    if (this._orders.length > 0) sql += ` ORDER BY ${this._orders.join(', ')}`
+    if (this._orders.length > 0) {
+      sql += ` ORDER BY ${this._orders.join(', ')}`
+    }
 
     // LIMIT / OFFSET
-    if (this._limitVal !== null)  sql += ` LIMIT ${this._limitVal}`
-    if (this._offsetVal !== null) sql += ` OFFSET ${this._offsetVal}`
+    if (this._limitVal !== null)  {
+      sql += ` LIMIT ${this._limitVal}`
+    }
+    if (this._offsetVal !== null) {
+      sql += ` OFFSET ${this._offsetVal}`
+    }
 
     return { text: sql, values: whereValues }
   }
@@ -320,14 +342,18 @@ class InsertQuery extends BaseQuery {
   }
 
   _buildInternal() {
-    if (!this._table) throw new Error('InsertQuery: into() must be called')
+    if (!this._table) {
+      throw new Error('InsertQuery: into() must be called')
+    }
 
     if (this._bulkRows && this._bulkRows.length > 0) {
       return this._buildBulk()
     }
 
     const keys = Object.keys(this._data)
-    if (keys.length === 0) throw new Error('InsertQuery: no data to insert (call set() or setFields())')
+    if (keys.length === 0) {
+      throw new Error('InsertQuery: no data to insert (call set() or setFields())')
+    }
 
     const values = []
     const placeholders = []
@@ -337,7 +363,9 @@ class InsertQuery extends BaseQuery {
     }
 
     let sql = `INSERT INTO ${this._table} (${keys.join(', ')}) VALUES (${placeholders.join(', ')})`
-    if (this._returning) sql += ` RETURNING ${this._returning}`
+    if (this._returning) {
+      sql += ` RETURNING ${this._returning}`
+    }
 
     return { text: sql, values }
   }
@@ -359,7 +387,9 @@ class InsertQuery extends BaseQuery {
     }
 
     let sql = `INSERT INTO ${this._table} (${keys.join(', ')}) VALUES ${rowPlaceholders.join(', ')}`
-    if (this._returning) sql += ` RETURNING ${this._returning}`
+    if (this._returning) {
+      sql += ` RETURNING ${this._returning}`
+    }
 
     return { text: sql, values }
   }
@@ -405,9 +435,13 @@ class UpdateQuery extends BaseQuery {
   }
 
   _buildInternal() {
-    if (!this._table) throw new Error('UpdateQuery: table() must be called')
+    if (!this._table) {
+      throw new Error('UpdateQuery: table() must be called')
+    }
     const keys = Object.keys(this._sets)
-    if (keys.length === 0) throw new Error('UpdateQuery: no data to update (call set() or setFields())')
+    if (keys.length === 0) {
+      throw new Error('UpdateQuery: no data to update (call set() or setFields())')
+    }
 
     const values = []
     const setClauses = []
@@ -426,7 +460,9 @@ class UpdateQuery extends BaseQuery {
     sql += whereClause
     values.push(...whereValues)
 
-    if (this._returning) sql += ` RETURNING ${this._returning}`
+    if (this._returning) {
+      sql += ` RETURNING ${this._returning}`
+    }
 
     return { text: sql, values }
   }
@@ -454,14 +490,18 @@ class DeleteQuery extends BaseQuery {
   }
 
   _buildInternal() {
-    if (!this._table) throw new Error('DeleteQuery: from() must be called')
+    if (!this._table) {
+      throw new Error('DeleteQuery: from() must be called')
+    }
 
     let sql = `DELETE FROM ${this._table}`
 
     const { clause: whereClause, values: whereValues } = this._buildWhere(1)
     sql += whereClause
 
-    if (this._returning) sql += ` RETURNING ${this._returning}`
+    if (this._returning) {
+      sql += ` RETURNING ${this._returning}`
+    }
 
     return { text: sql, values: whereValues }
   }
@@ -473,15 +513,25 @@ class DeleteQuery extends BaseQuery {
 
 export const squel = {
   /** Start a SELECT query builder. */
-  select() { return new SelectQuery() },
+  select() {
+    return new SelectQuery()
+  },
   /** Start an INSERT query builder. */
-  insert() { return new InsertQuery() },
+  insert() {
+    return new InsertQuery()
+  },
   /** Start an UPDATE query builder. */
-  update() { return new UpdateQuery() },
+  update() {
+    return new UpdateQuery()
+  },
   /** Start a DELETE query builder. Alias: remove(). */
-  delete() { return new DeleteQuery() },
+  delete() {
+    return new DeleteQuery()
+  },
   /** Alias for delete(). */
-  remove() { return new DeleteQuery() },
+  remove() {
+    return new DeleteQuery()
+  },
 }
 
 export default squel

@@ -16,22 +16,22 @@ import { KeycloakLoginController } from './keycloakLoginController.js'
 
 export const KeycloakLoginSchema = z.object({
   national_id: z.string().min(1, 'National ID is required').max(50),
-  password: z.string().min(1, 'Password is required').max(128),
+  password:    z.string().min(1, 'Password is required').max(72),
 })
 
 // ── Endpoints ───────────────────────────────────────────────
 
 const login = {
-  path:       '/',
-  verb:       'POST',
-  handler:    { controller: KeycloakLoginController, method: 'login' },
-  validation: { body: KeycloakLoginSchema },
+  path:    '/',
+  verb:    'POST',
+  handler: { controller: KeycloakLoginController, method: 'login', arguments: ['request:body'] },
+  request: { body: KeycloakLoginSchema },
 }
 
 const jwksInfo = {
   path:    '/jwks-info',
   verb:    'GET',
-  handler: { controller: KeycloakLoginController, method: 'jwksInfo' },
+  handler: { controller: KeycloakLoginController, method: 'jwksInfo', arguments: [] },
 }
 
 export const KeycloakLoginApi = new ApiSchema({

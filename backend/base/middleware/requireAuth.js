@@ -38,8 +38,10 @@ export function requireAuth(options = {}) {
   const secret    = options.jwtSecret    || process.env.JWT_SECRET
   const issuer    = options.jwtIssuer    || process.env.JWT_ISSUER
   const audience  = options.jwtAudience  || process.env.JWT_AUDIENCE
-  const startTime = options.serverStartTime ?? (process.env.SERVER_START_TIME ? parseInt(process.env.SERVER_START_TIME, 10) : null)
+  const startTime = options.serverStartTime
+    ?? (process.env.SERVER_START_TIME ? parseInt(process.env.SERVER_START_TIME, 10) : null)
   const log       = options.logger || { warn: (msg, meta) => console.warn(`[WARN] ${msg}`, meta ?? '') }
+  const redis     = options.redisClient || null
 
   if (!secret) {
     throw new Error('requireAuth: JWT_SECRET must be provided via options or environment variable')
@@ -58,8 +60,12 @@ export function requireAuth(options = {}) {
 
     try {
       const verifyOpts = {}
-      if (issuer)   verifyOpts.issuer   = issuer
-      if (audience) verifyOpts.audience  = audience
+      if (issuer)   {
+        verifyOpts.issuer   = issuer
+      }
+      if (audience) {
+        verifyOpts.audience  = audience
+      }
 
       const { payload } = await jwtVerify(token, secretKey, verifyOpts)
 
@@ -69,12 +75,25 @@ export function requireAuth(options = {}) {
         return
       }
 
+      // Check Redis token revocation blocklist
+      if (redis) {
+        try {
+          const isRevoked = await redis.get(`token:revoked:${payload.sub}`)
+          if (isRevoked) {
+            res.status(401).json({ success: false, error: { code: 'TOKEN_REVOKED', message: 'Token has been revoked' } })
+            return
+          }
+        } catch {
+          // Redis down — fail open (allow request through)
+        }
+      }
+
       req.user = {
         sub:         payload.sub,
-        national_id: payload.national_id,
         email:       payload.email,
-        roles:       payload.roles   || [],
+        roles:       payload.roles       || [],
         permissions: payload.permissions || [],
+        registry_id: payload.registry_id || null,
       }
 
       next()
@@ -88,22 +107,19 @@ export function requireAuth(options = {}) {
 
 /**
  * Require specific permissions. Must be used after requireAuth().
- * SuperAdmin bypasses all permission checks.
+ * No role-based bypass — SuperAdmin has all permissions assigned at the DB level.
  *
  * @param {...string} permissions
  * @returns {import('express').RequestHandler}
  */
 export function requirePermissions(...permissions) {
   return (req, res, next) => {
-    const userRoles = req.user?.roles || []
-    if (userRoles.includes('SuperAdmin')) return next()
-
     const userPerms = req.user?.permissions || []
     const hasPerm = permissions.some(p => userPerms.includes(p))
     if (!hasPerm) {
       res.status(403).json({
         success: false,
-        error: { code: 'FORBIDDEN', message: `Requires one of: ${permissions.join(', ')}` },
+        error:   { code: 'FORBIDDEN', message: `Requires one of: ${permissions.join(', ')}` },
       })
       return
     }

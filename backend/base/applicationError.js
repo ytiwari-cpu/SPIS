@@ -97,6 +97,15 @@ export class ApplicationError extends Error {
     return new ApplicationError(500, message, 'INTERNAL_ERROR')
   }
 
+  /**
+   * 500 Response Validation Error — server produced an invalid response shape.
+   * In dev: details are sent to the client.
+   * In prod: generic message only (errorHandler strips details).
+   */
+  static responseValidation(message = 'Response validation failed', errors = []) {
+    return new ApplicationError(500, message, 'RESPONSE_VALIDATION_ERROR', errors)
+  }
+
   /** 503 Service Unavailable */
   static serviceUnavailable(message = 'Service unavailable') {
     return new ApplicationError(503, message, 'SERVICE_UNAVAILABLE')

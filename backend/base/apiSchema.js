@@ -8,23 +8,24 @@
  *   verb       — HTTP verb (GET, POST, PATCH, PUT, DELETE)
  *   handler    — { controller: Class, method: string }
  *   middleware — array of Express middleware functions (optional)
- *   validation — { body?: ZodSchema, query?: ZodSchema, params?: ZodSchema } (optional)
+ *   request    — { body?: ZodSchema, query?: ZodSchema, params?: ZodSchema } (optional but recommended)
+ *   response   — ZodSchema for the full response envelope (optional but recommended)
  *   rateLimit  — { maxRequests: number, windowSec: number } (optional)
  *
- * Permission binding (NEW):
- *   permission       — single required permission string
- *   permissionsAnyOf — array; user needs at least ONE
- *   permissionsAllOf — array; user needs ALL
+ * Permission binding (single `permission` key, three forms):
+ *   permission: "x"             — single required permission
+ *   permission: ["x", "y"]       — AND semantics (all required)
+ *   permission: { anyOf: [...] } — OR semantics (at least one)
  *
- * When `validation` is present, the validate() middleware is auto-injected.
- * When `rateLimit` is present, the rateLimit() middleware is auto-injected.
- * When any permission field is present, requirePermission middleware is auto-injected.
+ * Validation:
+ *   - request: schema — auto-injects validate() before controller; skipped when omitted
+ *   - response: schema — stored on req.responseSchema; respondJson() validates before sending; skipped when omitted
  *
  * Middleware execution order:
  *   1. Rate limiter (MUST run first)
  *   2. Explicit middleware (auth, etc.)
  *   3. Permission check (auto-injected from endpoint config)
- *   4. Validation (Zod)
+ *   4. Request validation (Zod — only when request: declared)
  *   5. Controller handler
  *
  * Usage:
@@ -40,117 +41,167 @@
  *       },
  *       { path: '/',    verb: 'POST', handler: { controller: FamilyCtrl, method: 'create' },
  *         middleware: [requireAuth()],
- *         permissionsAnyOf: ['ADMIN.FAMILIES.CREATE', 'FAMILY.CREATE'],
- *         validation: { body: CreateFamilySchema },
- *         rateLimit:  { maxRequests: 60, windowSec: 60 },
+ *         permission: { anyOf: ['ADMIN.FAMILIES.CREATE', 'FAMILY.CREATE'] },
+ *         request:  { body: CreateFamilySchema },
+ *         response: CreateFamilyResponseSchema,
+ *         rateLimit: { maxRequests: 60, windowSec: 60 },
  *       },
  *     ],
  *   })
  *
- *   schema.register(app, undefined, { logger, redisClient })
+ *   schema.register(app, { redisClient, connection })
  */
 
 import { ApiContext } from './apiContext.js'
-import { validate as validateMiddleware } from './middleware/validate.js'
+import { validateRequest as validateMiddleware } from './middleware/validate.js'
 import { rateLimit as rateLimitMiddleware } from './middleware/rateLimiter.js'
 import { requirePermission as requirePermissionMiddleware } from './middleware/requirePermission.js'
+import { createUploadMiddleware } from './middleware/upload.js'
+import { cacheMiddleware }       from './middleware/cache.js'
+import { setCacheHeaders }       from './middleware/cacheHeaders.js'
+import { createRedisCache }      from './redisCache.js'
+import { createLogger }          from './logger.js'
+
+const logger = createLogger('ApiSchema')
 
 export class ApiSchema {
   /**
-   * @param {Array<{
+   * @param {{ name?: string, url?: string, endpoints: Array<{
    *   path: string,
    *   verb: string,
    *   handler: { controller: Function, method: string },
    *   middleware?: Function[],
-   *   validation?: { body?: import('zod').ZodSchema, query?: import('zod').ZodSchema, params?: import('zod').ZodSchema },
+   *   request?:  { body?: import('zod').ZodSchema, query?: import('zod').ZodSchema, params?: import('zod').ZodSchema },
+   *   response?: import('zod').ZodSchema,
    *   rateLimit?: { maxRequests: number, windowSec: number },
-   * }> | { name: string, url: string, endpoints: Array<{...}> }} schemaOrRoutes
+   * }> }} config
    */
-  constructor(schemaOrRoutes) {
-    if (Array.isArray(schemaOrRoutes)) {
-      this.name   = null
-      this.url    = ''
-      this.routes = schemaOrRoutes
-    } else if (schemaOrRoutes && schemaOrRoutes.endpoints) {
-      this.name   = schemaOrRoutes.name   || null
-      this.url    = schemaOrRoutes.url    || ''
-      this.routes = schemaOrRoutes.endpoints
-    } else {
-      this.name   = null
-      this.url    = ''
-      this.routes = [schemaOrRoutes]
-    }
+  constructor({ name, url, endpoints = [] } = {}) {
+    this.name   = name ?? null
+    this.url    = url?.trim() ?? ''
+    this.routes = endpoints
   }
 
   /**
    * Register all routes on an Express app or Router.
    *
    * @param {import('express').Application | import('express').Router} app
-   * @param {string} [basePath] — optional prefix; defaults to this.url when omitted
-   * @param {{ logger?: object, redisClient?: object }} [options] — shared dependencies
+   * @param {{ redisClient?: object, connection?: object }} [options]
    */
-  register(app, basePath, options = {}) {
-    const base = basePath !== undefined ? basePath : this.url
-    const { logger, redisClient } = options
+  register(app, options = {}) {
+    const { redisClient, connection, ...extras } = options
 
     for (const route of this.routes) {
       const {
-        path, verb, handler, middleware = [], validation,
-        rateLimit: rlConfig,
-        permission, permissionsAnyOf, permissionsAllOf,
+        path, verb, handler, middleware = [],
+        request, response,
+        rateLimit: rl,
+        permission,
+        file,
+        cache: cacheConfig,
+        cachePolicy,
       } = route
+      const argDefs = handler.arguments
       const httpMethod = verb.toLowerCase()
-      const fullPath   = base ? `${base}${path}` : path
+      const fullPath   = this.url ? `${this.url}${path}` : path
 
       if (typeof app[httpMethod] !== 'function') {
-        throw new Error(`ApiSchema: unsupported HTTP verb "${verb}"`)
+        throw new Error(`[ApiSchema] unsupported verb "${verb}" on ${fullPath}`)
       }
 
-      // Build middleware chain — ORDER MATTERS:
-      // 1. Rate limiter (MUST run first — before any heavy work)
-      // 2. Explicit middleware (auth, etc.)
-      // 3. Permission check (auto-injected from endpoint config)
-      // 4. Validation (Zod — after auth+permission, before controller)
+      // Warn about missing response schema — will become a hard error in future
+      // if (!response) {
+      //   logger.warn(`Missing response schema: ${verb} ${fullPath}`)
+      // }
+
+      // Build a Redis cache wrapper (safe even without a Redis client)
+      const cache = redisClient ? createRedisCache(redisClient) : null
+
       const chain = []
 
-      // 1) Rate limiter FIRST — runs before auth/controller logic
-      if (rlConfig && redisClient) {
+      // 1. Attach both schemas to req — validate() and respondJson() both read from req
+      chain.push((req, _res, next) => {
+        req.requestSchema  = request  ?? null
+        req.responseSchema = response ?? null
+        next()
+      })
+
+      // 1b. Cache-Control / Vary headers
+      if (cachePolicy) {
+        chain.push(setCacheHeaders(cachePolicy))
+      } else {
+        // Default: no-store for authenticated endpoints
+        chain.push(setCacheHeaders('no-store'))
+      }
+
+      // 2. Rate limiter
+      if (rl && redisClient) {
         chain.push(rateLimitMiddleware({
           prefix:      `${this.name || 'api'}:${httpMethod}:${path}`,
-          maxRequests: rlConfig.maxRequests,
-          windowSec:   rlConfig.windowSec,
+          maxRequests: rl.maxRequests,
+          windowSec:   rl.windowSec,
           redisClient,
-          logger,
         }))
       }
 
-      // 2) Explicit middleware (auth, permissions, etc.)
+      // 2b. Response cache (GET only)
+      if (cacheConfig && cache) {
+        chain.push(cacheMiddleware({
+          cache,
+          ttl:    cacheConfig.ttl    || 60,
+          prefix: cacheConfig.prefix || `${this.name || 'api'}:${httpMethod}:${path}`,
+        }))
+      }
+
+      // 3. Explicit middleware (auth, etc.)
       chain.push(...middleware)
 
-      // 3) Permission check — auto-injected when endpoint declares permission(s)
-      const hasPermConfig = permission || permissionsAnyOf || permissionsAllOf
-      if (hasPermConfig) {
-        chain.push(requirePermissionMiddleware({ permission, permissionsAnyOf, permissionsAllOf }))
+      // 3b. File upload (multer) — auto-injected when endpoint declares file:
+      if (file) {
+        chain.push(createUploadMiddleware(file))
       }
 
-      // 4) Validation LAST in middleware chain — after auth+permission, before controller
-      if (validation) {
-        chain.push(validateMiddleware(validation))
+      // 4. Permission
+      if (permission) {
+        chain.push(requirePermissionMiddleware({ permission }))
       }
 
-      app[httpMethod](
-        fullPath,
-        ...chain,
-        async (req, res, next) => {
-          try {
-            const ctx  = new ApiContext(req, res, logger)
-            const ctrl = new handler.controller(ctx)
-            await ctrl[handler.method]()
-          } catch (err) {
-            next(err)
+      // 5. Request validation — reads req.requestSchema, skips when null
+      chain.push(validateMiddleware())
+
+      // Resolve arguments — maps string tokens to actual request-context values.
+      // Every endpoint MUST declare 'arguments' explicitly (use [] for zero-argument methods).
+      // Supported tokens: 'request:body', 'request:params', 'request:query', 'user'
+      const resolveArgs = (defs, ctx) => {
+        if (!defs) {
+          throw new Error(`[ApiSchema] 'arguments' is required on every endpoint. Missing on: ${verb} ${fullPath}`)
+        }
+        const resolve = arg => {
+          switch (arg) {
+            case 'request:body':   return ctx.request.body
+            case 'request:params': return ctx.request.params
+            case 'request:query':  return ctx.request.query
+            case 'user':           return ctx.user
+            default:               return undefined
           }
-        },
-      )
+        }
+        return defs.map(resolve)
+      }
+
+      logger.debug(`Registered ${verb} ${fullPath}`)
+
+      app[httpMethod](fullPath, ...chain, async (req, _res, next) => {
+        try {
+          const context  = new ApiContext(req, connection, extras)
+          const ctrl = new handler.controller(context)
+          const args = resolveArgs(argDefs, context)
+          await ctrl[handler.method](...args)
+        } catch (err) {
+          next(err)
+        }
+      })
     }
+
+    logger.info(`${this.name}: ${this.routes.length} routes mounted on ${this.url || '/'}`)
   }
 }

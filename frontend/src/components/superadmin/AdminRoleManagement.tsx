@@ -23,6 +23,7 @@ import * as rbacApi from '@/services/rbacApi'
  */
 interface Role {
   id: string
+  roleId: string
   name: string
   description: string
   permissions: string[]
@@ -36,6 +37,7 @@ interface Role {
 function mapBackendRole(backendRole: rbacApi.Role): Role {
   return {
     id: backendRole.role_name,
+    roleId: backendRole.role_id,
     name: backendRole.role_name,
     description: backendRole.description,
     permissions: [], // Will be loaded separately
@@ -373,17 +375,24 @@ export default function AdminRoleManagementContent() {
         description: newRoleDescription.trim() || undefined,
       })
       
+      // Save any currently selected permissions to the new role
+      const permissionKeys = Array.from(editedPermissions)
+      if (permissionKeys.length > 0) {
+        await rbacApi.updateRolePermissions(newRole.role_name, permissionKeys)
+      }
+      
       // Add to local state
       setRoles(prev => [...prev, {
         id: newRole.role_name,
+        roleId: newRole.role_id,
         name: newRole.role_name,
         description: newRole.description || '',
-        permissions: [],
+        permissions: permissionKeys,
         isSystem: newRole.role_type === 'system',
         createdAt: newRole.created_at,
         updatedAt: newRole.created_at,
         userCount: 0,
-        permissionCount: 0,
+        permissionCount: permissionKeys.length,
       }])
       
       // Select the new role
@@ -401,17 +410,18 @@ export default function AdminRoleManagementContent() {
     } finally {
       setSaving(false)
     }
-  }, [newRoleName, newRoleDescription])
+  }, [newRoleName, newRoleDescription, editedPermissions])
 
   // Delete role - uses real API
   const handleDeleteRole = useCallback(async () => {
+    console.log('Deleting role:', selectedRole)
     if (!selectedRole || selectedRole.isSystem) return
     
     setSaving(true)
     setSaveError(null)
     
     try {
-      await rbacApi.deleteRole(selectedRole.name)
+      await rbacApi.deleteRole(selectedRole.roleId)
       
       // Remove from local state
       setRoles(prev => prev.filter(r => r.id !== selectedRole.id))

@@ -3,7 +3,7 @@
  *
  * Usage (from any service feature file):
  *
- *   import { ApiContext, BaseController, BaseService, BaseSupabaseRepository } from '../../../../base/index.js'
+ *   import { ApiContext, BaseController, BaseService, BaseRepository } from '../../../../base/index.js'
  *   import { ApplicationError }      from '../../../../base/index.js'
  *   import { createLogger }          from '../../../../base/index.js'
  *   import { QueryHelper }           from '../../../../base/index.js'
@@ -14,8 +14,7 @@ export { ApiContext }                from './apiContext.js'
 export { ApiSchema }                 from './apiSchema.js'
 export { BaseController }            from './baseController.js'
 export { BaseService }               from './baseService.js'
-export { BaseSupabaseRepository }    from './baseSupabaseRepository.js'
-export { BaseDbRepository }          from './baseDbRepository.js'
+export { BaseRepository }            from './baseRepository.js'
 
 // New: centralized error class
 export { ApplicationError }          from './applicationError.js'
@@ -27,7 +26,7 @@ export { createLogger }              from './logger.js'
 export { QueryHelper }               from './queryHelper.js'
 
 // New: table name constants (single source of truth)
-export { TABLES, FAMILY_TABLES, IAM_TABLES, EMAIL_TABLES, PROGRAMME_TABLES } from './table.js'
+export { TABLES, FAMILY, IAM, EMAIL, PROGRAMME } from './table.js'
 
 // New: middleware (re-export from middleware/index.js for convenience)
 export {
@@ -40,6 +39,5 @@ export {
   requireAuth,
   requirePermissions,
   requirePermission,
-  auditMiddleware,
   throttle,
 } from './middleware/index.js'

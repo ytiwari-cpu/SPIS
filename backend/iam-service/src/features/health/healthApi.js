@@ -10,17 +10,20 @@
 
 import { ApiSchema } from '../../../../base/apiSchema.js'
 import { HealthController } from './healthController.js'
+import { z } from 'zod'
 
 const liveness = {
-  path:    '/healthz',
-  verb:    'GET',
-  handler: { controller: HealthController, method: 'liveness' },
+  path:     '/healthz',
+  verb:     'GET',
+  handler:  { controller: HealthController, method: 'liveness', arguments: [] },
+  response: z.object({ status: z.enum(['ok', 'degraded']) }).passthrough(),
 }
 
 const readiness = {
-  path:    '/readyz',
-  verb:    'GET',
-  handler: { controller: HealthController, method: 'readiness' },
+  path:     '/readyz',
+  verb:     'GET',
+  handler:  { controller: HealthController, method: 'readiness', arguments: [] },
+  response: z.object({ status: z.enum(['ok', 'degraded']) }).passthrough(),
 }
 
 export const HealthApi = new ApiSchema({

@@ -1,0 +1,15 @@
+{
+  "name": "@spis/backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SPIS Backend — shared linting and tooling root",
+  "scripts": {
+    "eslint": "eslint --ext .js --fix base/ utils/ iam-service/src/ family-service/src/ email-service/src/ programme-service/src/",
+    "lint": "eslint --ext .js base/ utils/ iam-service/src/ family-service/src/ email-service/src/ programme-service/src/",
+    "lint:fix": "eslint --ext .js --fix base/ utils/ iam-service/src/ family-service/src/ email-service/src/ programme-service/src/"
+  },
+  "devDependencies": {
+    "eslint": "^8.56.0",
+    "eslint-plugin-import": "^2.29.1"
+  }
+}

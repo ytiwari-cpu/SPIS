@@ -31,6 +31,7 @@ export interface RoleRow {
 
 // Alias for backward compatibility
 export interface Role {
+  role_id: string
   role_name: string
   description: string
   is_system: boolean
@@ -42,6 +43,7 @@ export interface Role {
 // Helper to map RoleRow to Role interface
 function mapToRole(row: RoleRow): Role {
   return {
+    role_id: row.role_id,
     role_name: row.role_name,
     description: row.description || '',
     is_system: row.role_type === 'system',
@@ -212,8 +214,8 @@ export async function updateRole(roleName: string, payload: UpdateRolePayload): 
 /**
  * Delete a role (custom roles only) - soft delete
  */
-export async function deleteRole(roleName: string): Promise<void> {
-  const response = await authFetch(`${IAM_BASE_URL}/iam/admin/roles/${encodeURIComponent(roleName)}`, {
+export async function deleteRole(roleId: string): Promise<void> {
+  const response = await authFetch(`${IAM_BASE_URL}/iam/admin/roles/${roleId}`, {
     method: 'DELETE',
   })
   

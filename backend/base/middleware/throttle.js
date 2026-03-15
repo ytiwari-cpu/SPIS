@@ -49,7 +49,9 @@ export function throttle(options) {
   }
 
   return async (req, res, next) => {
-    if (!redisClient) return next()
+    if (!redisClient) {
+      return next()
+    }
 
     const identifier = keyFn ? keyFn(req) : (req.ip || 'unknown')
     const key = `throttle:${prefix}:${identifier}`
@@ -69,20 +71,27 @@ export function throttle(options) {
 
         res.status(429).json({
           success: false,
-          error: {
-            code: 429,
+          error:   {
+            code:    'THROTTLE_LIMIT',
             message: `Too many concurrent requests. Max ${maxConcurrent} allowed.`,
           },
         })
         return
       }
 
-      // Decrement on response finish
+      // Decrement on response finish (once-guard to prevent double-decrement)
+      let cleaned = false
       const cleanup = async () => {
+        if (cleaned) {
+          return
+        }
+        cleaned = true
         try {
           const val = await redisClient.decr(key)
           // Don't let counter go negative
-          if (val < 0) await redisClient.set(key, 0, 'EX', ttlSec)
+          if (val < 0) {
+            await redisClient.set(key, 0, 'EX', ttlSec)
+          }
         } catch (err) {
           log.error('Throttle cleanup error', { error: err.message, key })
         }

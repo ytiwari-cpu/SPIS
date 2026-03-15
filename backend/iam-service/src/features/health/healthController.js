@@ -7,13 +7,13 @@ import { testDbConnection } from '../../db/pool.js'
 import { testRedisConnection } from '../../lib/redis.js'
 
 export class HealthController extends BaseController {
-  constructor(ctx) {
-    super(ctx)
+  constructor(context) {
+    super(context)
   }
 
   /** GET /healthz — liveness */
   async liveness() {
-    this.respondOk({ status: 'ok', service: 'iam-service', timestamp: new Date().toISOString() })
+    await this.respondOk({ status: 'ok', service: 'iam-service', timestamp: new Date().toISOString() })
   }
 
   /** GET /readyz — readiness (DB + Redis) */
@@ -31,7 +31,7 @@ export class HealthController extends BaseController {
       status,
       checks: {
         database: dbOk ? 'ok' : 'fail',
-        redis: redisOk ? 'ok' : 'fail',
+        redis:    redisOk ? 'ok' : 'fail',
       },
       timestamp: new Date().toISOString(),
     }, httpStatus)

@@ -16,11 +16,10 @@ import { pool } from './db/pool.js'
 import { createLogger } from '../../base/logger.js'
 const logger = createLogger('email-service')
 
-const app = createApp()
-
 // ── Startup ─────────────────────────────────────────────────
 async function start() {
   try {
+    const app = await createApp()
     // Connect to RabbitMQ for publishing
     await connectBus()
 
@@ -61,5 +60,3 @@ process.on('SIGINT', shutdown)
 process.on('SIGTERM', shutdown)
 
 start()
-
-export default app

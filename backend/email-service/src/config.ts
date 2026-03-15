@@ -66,9 +66,9 @@ export const config = {
 
   // ── Rate Limits ─────────────────────────────────────────
   rateLimits: {
-    otpPerEmailPerHour: envInt('RATE_LIMIT_OTP_PER_EMAIL_PER_HOUR', 5),
+    otpPerEmailPerHour: envInt('RATE_LIMIT_OTP_PER_EMAIL_PER_HOUR', 20),
     invitePerEmailPerDay: envInt('RATE_LIMIT_INVITE_PER_EMAIL_PER_DAY', 3),
-    globalPerDay: envInt('RATE_LIMIT_GLOBAL_PER_DAY', 100),
+    globalPerDay: envInt('RATE_LIMIT_GLOBAL_PER_DAY', 500),
   },
 
   // ── Retry / Circuit Breaker ────────────────────────────

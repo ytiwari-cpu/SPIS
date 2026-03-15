@@ -5,72 +5,132 @@
  * Exported as createApp() so index.ts only handles server startup.
  */
 
-import express from 'express'
-import cors    from 'cors'
-import helmet  from 'helmet'
-import morgan  from 'morgan'
+import express     from 'express'
+import cors        from 'cors'
+import helmet      from 'helmet'
+import compression from 'compression'
 
-import { createLogger } from '../../base/logger.js'
-import { requestId }    from '../../base/middleware/requestId.js'
+import { createConnection, waitForDb }   from '../../base/db/createConnection.js'
+import { PROGRAMME }          from '../../base/table.js'
+
+import { requestId }         from '../../base/middleware/requestId.js'
+import { requestLogger }     from '../../base/middleware/requestLogger.js'
+import { requestTimeout }    from '../../base/middleware/requestTimeout.js'
+import { loadShedder }       from '../../base/middleware/loadShedder.js'
+import { waf }               from '../../base/middleware/waf.js'
 import { errorHandler as createErrorHandler, notFound } from '../../base/middleware/errorHandler.js'
+import { createRateLimiters } from '../../base/middleware/rateLimiter.js'
+import { createRequire } from 'node:module'
 
-import { ProgrammeApi }        from './modules/features/programme/programmeApi.js'
-import { RuleApi }             from './modules/features/rule/ruleApi.js'
-import { RuleGroupApi }        from './modules/features/ruleGroup/ruleGroupApi.js'
-import { VariableApi }         from './modules/features/variable/variableApi.js'
-import { CustomFieldApi }      from './modules/features/customField/customFieldApi.js'
-import { BeneficiaryApi }      from './modules/features/beneficiary/beneficiaryApi.js'
-import { EngineApi }           from './modules/features/engine/engineApi.js'
-import { AuditApi }            from './modules/features/audit/auditApi.js'
-import { ProgrammeManagerApi } from './modules/features/programmeManager/programmeManagerApi.js'
+import { registerFeatures }    from './features/index.js'
 
-import { testConnection } from './lib/supabase.js'
-
-const logger = createLogger('programme-service')
-
-export function createApp() {
+export async function createApp() {
   const app = express()
 
-  // ── Request ID ─────────────────────────────────────────────────────────
+  // ── DB connection ──────────────────────────────────────────────────────
+  const connection = createConnection({
+    connectionString: process.env.PROGRAMME_DATABASE_URL,
+    schema: 'programme',
+  })
+  connection.tables = PROGRAMME
+
+  // Wait for DB before registering routes (retries with back-off)
+  await waitForDb(connection, { label: 'programme-service' })
+
+  // ── 0. Security headers ────────────────────────────────────────────────
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc:     ["'none'"],
+        frameAncestors: ["'none'"],
+      },
+    },
+    hsts: {
+      maxAge:            31536000,
+      includeSubDomains: true,
+      preload:           true,
+    },
+    referrerPolicy:            { policy: 'no-referrer' },
+    crossOriginEmbedderPolicy: false,
+  }))
+
+  // ── 1. Request ID ─────────────────────────────────────────────────────
   app.use(requestId())
 
-  // ── Global middleware ──────────────────────────────────────────────────
-  app.use(helmet())
+  // ── 2. Compression ────────────────────────────────────────────────────
+  app.use(compression({ threshold: 1024 }))
+
+  // ── 3. Request timeout ────────────────────────────────────────────────
+  app.use(requestTimeout(parseInt(process.env.REQUEST_TIMEOUT_MS || '30000')))
+
+  // ── 4. Load shedder ───────────────────────────────────────────────────
+  app.use(loadShedder())
+
+  // ── 5. WAF ────────────────────────────────────────────────────────────
+  app.use(waf())
+
+  // ── 6. Rate limiters ──────────────────────────────────────
+  let redisClient = null
+  try {
+    if (process.env.REDIS_URL) {
+      const require_ = createRequire(import.meta.url)
+      const Redis = require_('ioredis')
+      redisClient = new Redis(process.env.REDIS_URL, {
+        retryStrategy:        (times) => Math.min(times * 200, 5000),
+        maxRetriesPerRequest: 1,
+        enableOfflineQueue:   false,
+        lazyConnect:          true,
+      })
+      redisClient.on('error', () => {})
+    }
+  } catch { /* ioredis not installed — rate limiting disabled */ }
+  const rateLimiters = createRateLimiters(redisClient)
+  app.use('/api/v1', (req, res, next) => {
+    if (['POST','PATCH','PUT','DELETE'].includes(req.method)) {
+      return rateLimiters.write(req, res, next)
+    }
+    next()
+  })
+  app.use('/api/v1', (req, res, next) => {
+    if (req.method === 'GET') {
+      return rateLimiters.read(req, res, next)
+    }
+    next()
+  })
+
+  // ── 7. Structured request logging ─────────────────────────────────────
+  app.use(requestLogger())
+
+  // ── 8. CORS ───────────────────────────────────────────────────────────
   app.use(cors({
     origin:      process.env.CORS_ORIGIN || 'http://localhost:3000',
     credentials: true,
   }))
-  app.use(morgan('combined'))
-  app.use(express.json({ limit: '10mb' }))
-  app.use(express.urlencoded({ extended: true }))
+
+  // ── 9. Body parsing ──────────────────────────────────────────────────
+  app.use(express.json({ limit: '1mb' }))
+  app.use(express.urlencoded({ extended: true, limit: '1mb' }))
+
+  // ── 10. Audit logging — TODO: wire when DB pool is available
 
   // ── Health checks ──────────────────────────────────────────────────────
   const healthHandler = async (_req, res) => {
-    const dbStatus = await testConnection()
-    res.json({
-      status:    dbStatus.success ? 'ok' : 'degraded',
-      service:   'programme-service',
-      database:  dbStatus.success ? 'connected' : dbStatus.error,
-      timestamp: new Date().toISOString(),
-    })
+    try {
+      await connection.query('SELECT 1 AS ok')
+      res.json({ status: 'ok', service: 'programme-service', timestamp: new Date().toISOString() })
+    } catch (err) {
+      res.json({ status: 'degraded', service: 'programme-service', database: err.message, timestamp: new Date().toISOString() })
+    }
   }
   app.get('/health',  healthHandler)
   app.get('/healthz', healthHandler)
 
   // ── Feature routes ─────────────────────────────────────────────────────
-  ProgrammeApi.register(app, undefined, { logger })
-  RuleApi.register(app, undefined, { logger })
-  RuleGroupApi.register(app, undefined, { logger })
-  VariableApi.register(app, undefined, { logger })
-  CustomFieldApi.register(app, undefined, { logger })
-  BeneficiaryApi.register(app, undefined, { logger })
-  EngineApi.register(app, undefined, { logger })
-  AuditApi.register(app, undefined, { logger })
-  ProgrammeManagerApi.register(app, undefined, { logger })
+  registerFeatures(app, { connection })
 
   // ── Fallbacks ──────────────────────────────────────────────────────────
   app.use(notFound)
-  app.use(createErrorHandler(logger))
+  app.use(createErrorHandler())
 
   return app
 }

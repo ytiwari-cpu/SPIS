@@ -69,8 +69,8 @@ export function rateLimit(options) {
 
         res.status(429).json({
           success: false,
-          error: {
-            code: 429,
+          error:   {
+            code:    'RATE_LIMITED',
             message: `Too many requests. Try again in ${ttl > 0 ? ttl : windowSec} seconds.`,
           },
         })
@@ -98,29 +98,33 @@ export function rateLimit(options) {
 export function createRateLimiters(redisClient, logger) {
   return {
     /** Login: 10 per IP per 15 min */
-    loginAttempt: rateLimit({ prefix: 'login',       maxRequests: 10,  windowSec: 900,  redisClient, logger }),
+    loginAttempt:  rateLimit({ prefix: 'login',       maxRequests: 10,  windowSec: 900,  redisClient, logger }),
     /** Password reset: 5 per IP per 15 min */
     passwordReset: rateLimit({ prefix: 'pw-reset',   maxRequests: 5,   windowSec: 900,  redisClient, logger }),
     /** OTP request: 5 per IP per 15 min */
-    otpRequest: rateLimit({ prefix: 'otp-req',       maxRequests: 5,   windowSec: 900,  redisClient, logger }),
+    otpRequest:    rateLimit({ prefix: 'otp-req',       maxRequests: 5,   windowSec: 900,  redisClient, logger }),
     /** General API: 100 per IP per 1 min */
-    apiGeneral: rateLimit({ prefix: 'api-gen',       maxRequests: 100, windowSec: 60,   redisClient, logger }),
+    apiGeneral:    rateLimit({ prefix: 'api-gen',       maxRequests: 100, windowSec: 60,   redisClient, logger }),
     /** Heavy API: 20 per IP per 1 min */
-    apiHeavy: rateLimit({ prefix: 'api-heavy',       maxRequests: 20,  windowSec: 60,   redisClient, logger }),
+    apiHeavy:      rateLimit({ prefix: 'api-heavy',       maxRequests: 20,  windowSec: 60,   redisClient, logger }),
     /** Bulk import: 5 per IP per 10 min */
-    bulkImport: rateLimit({ prefix: 'bulk-import',   maxRequests: 5,   windowSec: 600,  redisClient, logger }),
+    bulkImport:    rateLimit({ prefix: 'bulk-import',   maxRequests: 5,   windowSec: 600,  redisClient, logger }),
     /** Email send: 50 per IP per 1 min */
-    emailSend: rateLimit({ prefix: 'email-send',     maxRequests: 50,  windowSec: 60,   redisClient, logger }),
+    emailSend:     rateLimit({ prefix: 'email-send',     maxRequests: 50,  windowSec: 60,   redisClient, logger }),
     /** File upload: 10 per IP per 1 min */
-    fileUpload: rateLimit({ prefix: 'file-upload',   maxRequests: 10,  windowSec: 60,   redisClient, logger }),
+    fileUpload:    rateLimit({ prefix: 'file-upload',   maxRequests: 10,  windowSec: 60,   redisClient, logger }),
     /** Registration: 30 per IP per 1 min */
-    registration: rateLimit({ prefix: 'registration', maxRequests: 30, windowSec: 60,   redisClient, logger }),
+    registration:  rateLimit({ prefix: 'registration', maxRequests: 30, windowSec: 60,   redisClient, logger }),
     /** MFA operations: 10 per user per 5 min */
-    mfaOperation: rateLimit({
-      prefix: 'mfa-op', maxRequests: 10, windowSec: 300, redisClient, logger,
-      keyFn: (req) => req.user?.sub || req.ip || 'unknown',
+    mfaOperation:  rateLimit({
+      prefix:      'mfa-op', maxRequests: 10, windowSec:   300, redisClient, logger,
+      keyFn:       (req) => req.user?.sub || req.ip || 'unknown',
     }),
     /** Invite: 20 per IP per 1 hour */
     invite: rateLimit({ prefix: 'invite', maxRequests: 20, windowSec: 3600, redisClient, logger }),
+    /** Write operations (POST/PATCH/PUT/DELETE): 60 per IP per 1 min */
+    write:  rateLimit({ prefix: 'write', maxRequests: 60, windowSec: 60, redisClient, logger }),
+    /** Read operations (GET): 120 per IP per 1 min */
+    read:   rateLimit({ prefix: 'read', maxRequests: 120, windowSec: 60, redisClient, logger }),
   }
 }
