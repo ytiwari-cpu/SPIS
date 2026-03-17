@@ -9,7 +9,7 @@
 
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuthStore } from '@/store/authStore'
+import { useFamilyUuid } from '@/store/authStore'
 import { authFetch, extractApiError } from '@/services/authFetch'
 
 // Database-aligned types (post-migration 006 + 010)
@@ -199,7 +199,7 @@ const sortMembers = (members: MemberDB[]): MemberDB[] => {
 
 export default function MyFamilyContent() {
   const navigate = useNavigate()
-  const { user } = useAuthStore()
+  const familyUuid = useFamilyUuid()
   
   const [family, setFamily] = useState<FamilyDB | null>(null)
   const [members, setMembers] = useState<MemberDB[]>([])
@@ -211,7 +211,7 @@ export default function MyFamilyContent() {
 
   useEffect(() => {
     const fetchFamilyData = async () => {
-      if (!user?.uuid) {
+      if (!familyUuid) {
         setIsLoading(false)
         setError('No family associated with this account')
         return
@@ -223,7 +223,7 @@ export default function MyFamilyContent() {
 
         // Fetch family with all related data (members, address, documents)
         // Use uuid for API calls (internal identifier)
-        const familyRes = await authFetch(`/families/${user.uuid}`)
+        const familyRes = await authFetch(`/families/${familyUuid}`)
         const familyData = await familyRes.json()
         
         if (!familyData.success) {
@@ -247,7 +247,7 @@ export default function MyFamilyContent() {
     }
 
     fetchFamilyData()
-  }, [user?.uuid])
+  }, [familyUuid])
 
   if (isLoading) {
     return (

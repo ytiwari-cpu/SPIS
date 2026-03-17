@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuthStore } from '@/store/authStore'
+import { useFamilyUuid } from '@/store/authStore'
 import { authFetch, authUpload, API_BASE, extractApiError } from '@/services/authFetch'
 import type { DocumentStatus } from '@/types'
 
@@ -105,9 +105,8 @@ const getStatusBadge = (status: string) => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export default function DocumentsContent() {
-  const { user } = useAuthStore()
   const navigate = useNavigate()
-  const familyUuid = user?.uuid || null
+  const familyUuid = useFamilyUuid()
 
   // Data state
   const [members, setMembers] = useState<MemberInfo[]>([])

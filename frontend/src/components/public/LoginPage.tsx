@@ -53,14 +53,14 @@ export default function LoginPageContent() {
     const perms = sessionData.permissions || []
     const hasCitizenPerms = perms.some((p: string) => p.startsWith('CITIZEN.'))
 
-    if (hasCitizenPerms && sessionData.uuid) {
+    if (hasCitizenPerms) {
       try {
         const meResponse = await authApi.getMe()
-        if (meResponse.success && meResponse.data) {
+        if (meResponse.success && meResponse.data && !(meResponse.data as any).no_family) {
           setFamilyDetails(meResponse.data, meResponse.data.head_member || null)
         }
       } catch {
-        // No family record — continue without family details
+        // No family record — citizen may not have registered yet
       }
     }
 

@@ -30,8 +30,8 @@ interface AuthState {
   hasRole: (role: string) => boolean
   refreshPermissions: () => Promise<void>
   
-  // Legacy compatibility - uuid for routing, family_id for display
-  user: { uuid: string; family_id: string; name: string } | null
+  // Legacy compatibility - familyUUID for routing, family_id for display
+  user: { familyUUID: string; family_id: string; name: string } | null
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -52,7 +52,7 @@ export const useAuthStore = create<AuthState>()(
           session,
           error: null,
           user: {
-            uuid: session.uuid || session.user_id || '',
+            familyUUID: session.familyUUID || '',
             family_id: session.family_id || '',
             name: session.email || (session.family_id ? `Family ${session.family_id}` : 'User'),
           },
@@ -69,9 +69,9 @@ export const useAuthStore = create<AuthState>()(
         set((state) => ({
           familyDetails: family,
           headMember,
-          user: { uuid: family.uuid, family_id: family.family_id, name },
-          // Also patch session.uuid so useFamilyUuid() always reflects the family
-          session: state.session ? { ...state.session, uuid: family.uuid, family_id: family.family_id } : state.session,
+          user: { familyUUID: family.uuid, family_id: family.family_id, name },
+          // Also patch session.familyUUID so useFamilyUuid() always reflects the family
+          session: state.session ? { ...state.session, familyUUID: family.uuid, family_id: family.family_id } : state.session,
         }))
       },
 
@@ -200,7 +200,7 @@ if (typeof window !== 'undefined') {
 // Helper hook to get UUID from session (for API calls)
 export const useFamilyUuid = (): string | null => {
   const session = useAuthStore((state: AuthState) => state.session)
-  return session?.uuid || null
+  return session?.familyUUID || null
 }
 
 // Helper hook to get family_id from session (for display)

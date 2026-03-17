@@ -62,7 +62,7 @@ function App() {
           const accessToken = stored.state?.session?.access_token
           if (!accessToken) return
 
-          const response = await fetch('http://localhost:3001/api/v1/families', {
+          const response = await fetch('http://localhost:3001/api/v1/auth/me', {
             method: 'GET',
             headers: {
               'Authorization': `Bearer ${accessToken}`,
@@ -79,7 +79,7 @@ function App() {
         }
       }
 
-      validateServerSide()
+      // validateServerSide()
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 

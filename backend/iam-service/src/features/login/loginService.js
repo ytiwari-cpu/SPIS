@@ -169,9 +169,9 @@ export class LoginService extends BaseService {
 
     this.log.info('User authenticated', { user_id: user.user_id, roles })
 
-    // 6. Generate JWT (national_id intentionally omitted — PII, never in JWT)
+    // 6. Generate JWT (includes national_id so /auth/me can resolve family)
     const accessToken = await signToken(
-      { userId: user.user_id, email: user.email, roles, permissions, registryId: user.registry_id || undefined },
+      { userId: user.user_id, email: user.email, nationalId, roles, permissions, registryId: user.registry_id || undefined },
       {
         secret: config.jwt.secret, expiresInSeconds: config.jwt.expiresInSeconds,
         issuer: config.jwt.issuer, audience: config.jwt.audience,

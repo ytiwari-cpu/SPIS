@@ -326,7 +326,7 @@ export type PaginatedApiResponse<T> = PaginatedResponse<T>
 // Post-migration 006: uuid for routing, family_id for display
 // ────────────────────────────────────────────────────────────────────────────
 export interface AuthSession {
-  uuid?: string                             // Internal UUID for API routing (absent for users without family)
+  familyUUID?: string                             // Internal UUID for API routing (absent for users without family)
   family_id?: string                        // Human-readable ID for display (F123)
   status?: FamilyStatus | null
   registration_status?: RegistrationStatus | null

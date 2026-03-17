@@ -72,7 +72,7 @@ const list = {
   verb:       'GET',
   handler:    { controller: FamilyController, method: 'list', arguments: ['request:query'] },
   middleware: auth,
-  permission: { anyOf: ['ADMIN.FAMILIES.VIEW', 'CITIZEN.FAMILY.VIEW'] },
+  permission: 'ADMIN.FAMILIES.VIEW',
   cache:      { ttl: 60, prefix: 'family:families' },
 }
 

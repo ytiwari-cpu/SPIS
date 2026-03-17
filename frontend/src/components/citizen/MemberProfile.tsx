@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuthStore } from '@/store/authStore'
+import { useFamilyUuid } from '@/store/authStore'
 import { authFetch } from '@/services/authFetch'
 
 interface MemberDB {
@@ -133,7 +133,7 @@ const formatCurrency = (amount: number | null): string => {
 
 export default function MemberProfileContent() {
   const navigate = useNavigate()
-  const { user } = useAuthStore()
+  const familyUuid = useFamilyUuid()
   const [family, setFamily] = useState<FamilyWithDetails | null>(null)
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -143,7 +143,7 @@ export default function MemberProfileContent() {
   // Fetch family data
   useEffect(() => {
     const fetchProfile = async () => {
-      if (!user?.uuid) {
+      if (!familyUuid) {
         setNoFamily(true)
         setIsLoading(false)
         return
@@ -151,7 +151,7 @@ export default function MemberProfileContent() {
 
       try {
         // Use uuid for API calls (internal identifier)
-        const res = await authFetch(`/families/${user.uuid}`)
+        const res = await authFetch(`/families/${familyUuid}`)
         const data = await res.json()
 
         if (res.status === 404 || (data && !data.success)) {
@@ -175,7 +175,7 @@ export default function MemberProfileContent() {
     }
 
     fetchProfile()
-  }, [user?.uuid])
+  }, [familyUuid])
 
   // Fetch profile photo when selected member changes
   useEffect(() => {

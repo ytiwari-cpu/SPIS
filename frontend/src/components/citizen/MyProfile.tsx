@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { useAuthStore } from '@/store/authStore'
+import { useAuthStore, useFamilyUuid } from '@/store/authStore'
 import { authFetch } from '@/services/authFetch'
 
 interface MemberDB {
@@ -52,20 +52,21 @@ interface FamilyWithDetails {
 
 export default function MyProfileContent() {
   const { user } = useAuthStore()
+  const familyUuid = useFamilyUuid()
   const [family, setFamily] = useState<FamilyWithDetails | null>(null)
   const [headMember, setHeadMember] = useState<MemberDB | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const fetchProfile = async () => {
-      if (!user?.uuid) {
+      if (!familyUuid) {
         setIsLoading(false)
         return
       }
 
       try {
         // Use uuid for API calls (internal identifier)
-        const res = await authFetch(`/families/${user.uuid}`)
+        const res = await authFetch(`/families/${familyUuid}`)
         const data = await res.json()
 
         if (data.success && data.data) {
@@ -84,7 +85,7 @@ export default function MyProfileContent() {
     }
 
     fetchProfile()
-  }, [user?.uuid])
+  }, [familyUuid])
 
   // Get display values from family or head member
   const displayName = family?.head_first_name && family?.head_last_name
