@@ -69,7 +69,7 @@ module.exports = {
     'prefer-const':        ['error', { destructuring: 'all' }],
     'no-undef':            'error',
     'eqeqeq':             ['error', 'always', { null: 'ignore' }],
-    'curly':               'error',
+    'curly':               ['error', 'multi-line'],
     'block-scoped-var':    'error',
     'no-else-return':      ['error', { allowElseIf: false }],
     'consistent-return':   'warn',

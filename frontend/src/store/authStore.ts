@@ -31,7 +31,7 @@ interface AuthState {
   refreshPermissions: () => Promise<void>
   
   // Legacy compatibility - familyUUID for routing, family_id for display
-  user: { familyUUID: string; family_id: string; name: string } | null
+  user: { familyUUID: string; family_id: string; name: string; user_id: string } | null
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -55,6 +55,7 @@ export const useAuthStore = create<AuthState>()(
             familyUUID: session.familyUUID || '',
             family_id: session.family_id || '',
             name: session.email || (session.family_id ? `Family ${session.family_id}` : 'User'),
+            user_id: session.user_id || '',
           },
         })
         // Notify other tabs about the new login
@@ -69,7 +70,7 @@ export const useAuthStore = create<AuthState>()(
         set((state) => ({
           familyDetails: family,
           headMember,
-          user: { familyUUID: family.uuid, family_id: family.family_id, name },
+          user: { familyUUID: family.uuid, family_id: family.family_id, name, user_id: get().user?.user_id || '' },
           // Also patch session.familyUUID so useFamilyUuid() always reflects the family
           session: state.session ? { ...state.session, familyUUID: family.uuid, family_id: family.family_id } : state.session,
         }))

@@ -18,7 +18,7 @@ export class AuthRepository extends BaseRepository {
       .limit(1)
       .toParam()
     const rows = await this.runQuery(text, values, true)
-    return rows[0] ?? null
+    return rows[0]
   }
 
   async getFamilyByUuid(familyUuid) {
@@ -27,7 +27,7 @@ export class AuthRepository extends BaseRepository {
       .where('uuid', '=', familyUuid)
       .toParam()
     const rows = await this.runQuery(text, values, true)
-    return rows[0] ?? null
+    return rows[0]
   }
 
   async getFamilyFullByUuid(familyUuid) {
@@ -36,7 +36,7 @@ export class AuthRepository extends BaseRepository {
       .where('uuid', '=', familyUuid)
       .toParam()
     const rows = await this.runQuery(text, values, true)
-    return rows[0] ?? null
+    return rows[0]
   }
 
   async getFamilyByFamilyId(familyId) {

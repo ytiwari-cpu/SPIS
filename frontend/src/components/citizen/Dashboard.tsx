@@ -46,12 +46,13 @@ export default function DashboardContent() {
     setIsLoading(true)
     try {
       const res = await authFetch('/auth/me')
-      const data = await res.json()
-      if (data.success && data.data?.uuid && !data.data?.no_family) {
+      const {data} = await res.json()
+      console.log('data', data)
+      if (data?.familyUUID && !data?.no_family) {
         // Found a family — patch the auth store so future renders work correctly
         setFamilyDetails(data.data, data.data.head_member || null)
         // Load full details (getById includes members/address/docs)
-        const response = await familyApi.getById(data.data.uuid)
+        const response = await familyApi.getById(data.familyUUID)
         if (response.success && response.data) {
           setFamilyData(response.data)
         } else {

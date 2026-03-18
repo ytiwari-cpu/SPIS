@@ -2,6 +2,7 @@
  * AuthService — IAM proxy + family data enrichment
  */
 
+import { BaseService }    from '../../../../base/baseService.js'
 import { AuthRepository } from './authRepository.js'
 
 const IAM_SERVICE_URL = process.env.IAM_SERVICE_URL || 'http://localhost:3003'
@@ -13,20 +14,14 @@ function normalizeNationalId(value) {
 async function authenticateWithIAM(nationalId, password) {
   try {
     const response = await fetch(`${IAM_SERVICE_URL}/iam/login`, {
-      method:  'POST',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ national_id: nationalId, password }),
+      body: JSON.stringify({ national_id: nationalId, password }),
     })
     const json = await response.json()
     if (!response.ok) {
       const errObj = json.error
-      return {
-        ok:        false,
-        status:    response.status,
-        error:     String(errObj?.message || json.message || 'Authentication failed'),
-        errorCode: errObj?.code,
-        details:   errObj?.details,
-      }
+      return { ok: false, error: String(errObj?.message || json.message || 'Authentication failed') }
     }
     return { ok: true, data: json.data }
   } catch (err) {
@@ -34,9 +29,10 @@ async function authenticateWithIAM(nationalId, password) {
   }
 }
 
-export class AuthService {
-  /** @param {import('./authRepository.js').AuthRepository} repo */
+export class AuthService extends BaseService {
+  /** @param {import('../../../../base/apiContext.js').ApiContext} context */
   constructor(context) {
+    super(context)
     this.repo = new AuthRepository(context)
   }
 
@@ -48,7 +44,7 @@ export class AuthService {
 
     const tokenResult = await authenticateWithIAM(cleanNationalId, password)
     if (!tokenResult.ok || !tokenResult.data) {
-      return { authFailed: true, status: tokenResult.status, error: tokenResult.error || 'Invalid credentials', errorCode: tokenResult.errorCode, details: tokenResult.details }
+      return { authFailed: true, error: tokenResult.error || 'Invalid credentials' }
     }
 
     const baseAuthData = {
@@ -67,18 +63,16 @@ export class AuthService {
     if (!member) {
       return { data: baseAuthData }
     }
-
     const family = await this.repo.getFamilyByUuid(member.family_uuid)
     if (!family) {
       return { data: baseAuthData }
     }
-
     return {
       data: {
         ...baseAuthData,
-        uuid:                family.uuid, family_id:           family.family_id, status:              family.status,
-        registration_status: family.registration_status, household_size:      family.household_size,
-        created_at:          family.created_at,
+        familyUUID: family.uuid, family_id: family.family_id, status: family.status,
+        registration_status: family.registration_status, household_size: family.household_size,
+        created_at: family.created_at,
       },
     }
   }
@@ -86,9 +80,9 @@ export class AuthService {
   async proxyOtpLoginRequest(nationalIdRaw) {
     const cleanNationalId = normalizeNationalId(nationalIdRaw)
     const response = await fetch(`${IAM_SERVICE_URL}/iam/otp-login/request`, {
-      method:  'POST',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ national_id: cleanNationalId }),
+      body: JSON.stringify({ national_id: cleanNationalId }),
     })
     const json = await response.json()
     return { status: response.ok ? 200 : response.status, json }
@@ -97,58 +91,48 @@ export class AuthService {
   async verifyOtpLogin(nationalIdRaw, otp) {
     const cleanNationalId = normalizeNationalId(nationalIdRaw)
     const iamResponse = await fetch(`${IAM_SERVICE_URL}/iam/otp-login/verify`, {
-      method:  'POST',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ national_id: cleanNationalId, otp }),
+      body: JSON.stringify({ national_id: cleanNationalId, otp }),
     })
     const iamJson = await iamResponse.json()
-    if (!iamResponse.ok) {
-      return { failed: true, status: iamResponse.status, json: iamJson }
-    }
+    if (!iamResponse.ok) return { failed: true, status: iamResponse.status, json: iamJson }
 
     const tokenData = iamJson.data
-    if (!tokenData) {
-      return { failed: true, status: 500, json: { success: false, error: 'Invalid response from IAM service' } }
-    }
+    if (!tokenData) return { failed: true, status: 500, json: { success: false, error: 'Invalid response from IAM service' } }
 
     const permissions = tokenData.permissions || []
     const hasAdminPermissions = permissions.some(p => p.startsWith('ADMIN.'))
     if (hasAdminPermissions) {
       return {
         data: {
-          auth_mode:    'iam_national_id', national_id:  cleanNationalId,
-          access_token: tokenData.access_token, user_id:      tokenData.user_id,
-          email:        tokenData.email, roles:        tokenData.roles, permissions:  tokenData.permissions,
-          is_staff:     true, is_new_user:  tokenData.is_new_user,
+          auth_mode: 'iam_national_id', national_id: cleanNationalId,
+          access_token: tokenData.access_token, user_id: tokenData.user_id,
+          email: tokenData.email, roles: tokenData.roles, permissions: tokenData.permissions,
+          is_staff: true, is_new_user: tokenData.is_new_user,
         },
       }
     }
 
-    const member = await this.repo.getMemberByNationalId(cleanNationalId)
-    if (!member) {
-      return { memberNotFound: true }
-    }
+    const { data: member, error: memberError } = await this.repo.getMemberByNationalId(cleanNationalId)
+    if (memberError || !member) return { memberNotFound: true }
 
-    const family = await this.repo.getFamilyByUuid(member.family_uuid)
-    if (!family) {
-      return { familyNotFound: true }
-    }
+    const { data: family, error: familyError } = await this.repo.getFamilyByUuid(member.family_uuid)
+    if (familyError || !family) return { familyNotFound: true }
 
     return {
       data: {
-        uuid:                family.uuid, family_id:           family.family_id, status:              family.status,
-        registration_status: family.registration_status, household_size:      family.household_size,
-        created_at:          family.created_at, auth_mode:           'iam_national_id', national_id:         cleanNationalId,
-        access_token:        tokenData.access_token, token_type:          tokenData.token_type,
-        expires_in:          tokenData.expires_in,
-        roles:               tokenData.roles,
-        permissions:         tokenData.permissions,
-        user_id:             tokenData.user_id, is_new_user:         tokenData.is_new_user,
+        familyUUID: family.uuid, family_id: family.family_id, status: family.status,
+        registration_status: family.registration_status, household_size: family.household_size,
+        created_at: family.created_at, auth_mode: 'iam_national_id', national_id: cleanNationalId,
+        access_token: tokenData.access_token, token_type: tokenData.token_type,
+        expires_in: tokenData.expires_in, roles: tokenData.roles, permissions: tokenData.permissions,
+        user_id: tokenData.user_id, is_new_user: tokenData.is_new_user,
       },
     }
   }
 
-  async me(authHeader, familyIdHeader) {
+  async me(authHeader, familyIdHeader, nationalIdHeader) {
     let memberNationalId = null
     let jwtPayload = null
 
@@ -158,16 +142,17 @@ export class AuthService {
         const payloadB64 = token.split('.')[1]
         if (payloadB64) {
           jwtPayload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString())
-          if (jwtPayload?.national_id) {
-            memberNationalId = jwtPayload.national_id
-          }
+          if (jwtPayload?.national_id) memberNationalId = jwtPayload.national_id
         }
       } catch (_err) { /* ignore */ }
     }
 
-    if (!jwtPayload) {
-      return { unauthenticated: true }
+    // Fallback: accept national_id from X-National-ID header when JWT doesn't contain it
+    if (!memberNationalId && nationalIdHeader) {
+      memberNationalId = normalizeNationalId(nationalIdHeader)
     }
+
+    if (!jwtPayload) return { unauthenticated: true }
 
     const baseUserData = {
       user_id:     jwtPayload.sub,
@@ -180,29 +165,21 @@ export class AuthService {
     let familyUuid = null
     if (memberNationalId) {
       const member = await this.repo.getMemberByNationalId(memberNationalId)
-      if (member) {
-        familyUuid = member.family_uuid
-      }
+      if (member) familyUuid = member.family_uuid
     }
 
     if (!familyUuid && familyIdHeader) {
       const fam = await this.repo.getFamilyByFamilyId(familyIdHeader)
-      if (fam) {
-        familyUuid = fam.uuid
-      }
+      if (fam) familyUuid = fam.uuid
     }
 
-    if (!familyUuid) {
-      return { data: { ...baseUserData, no_family: true } }
-    }
+    if (!familyUuid) return { data: { ...baseUserData, no_family: true } }
 
     const family = await this.repo.getFamilyFullByUuid(familyUuid)
-    if (!family) {
-      return { data: { ...baseUserData, no_family: true } }
-    }
+    if (!family) return { data: { ...baseUserData, no_family: true } }
 
     const headMember = await this.repo.getHeadMemberByFamily(family.uuid)
 
-    return { data: { ...baseUserData, ...family, head_member: headMember || null } }
+    return { data: { ...baseUserData, ...family, familyUUID: family.uuid, head_member: headMember || null } }
   }
 }

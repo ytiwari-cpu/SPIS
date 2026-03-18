@@ -137,7 +137,7 @@ export default function FamilyEditContent() {
 
   // Get family UUID from URL params or auth (uses uuid for API routing)
   const familyUuidParam = searchParams.get('id') || searchParams.get('family')
-  const familyId = familyUuidParam || user?.uuid
+  const familyId = familyUuidParam || user?.familyUUID
 
   // Original data (for comparison)
   const [originalFamily, setOriginalFamily] = useState<FamilyDB | null>(null)
@@ -346,7 +346,7 @@ export default function FamilyEditContent() {
         body: JSON.stringify({
           ...pendingChanges,
           reason: saveReason,
-          changed_by: user?.uuid || user?.family_id,
+          changed_by: user?.user_id || null,
         }),
       })
 

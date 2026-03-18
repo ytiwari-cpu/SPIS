@@ -270,7 +270,7 @@ export default function CommonProgramme({ mode: modeProp }: CommonProgrammeProps
           // citizen — fetch only MY enrollments, with programme data embedded.
           // We never call getProgrammes() here — citizens don't have access to
           // the admin listing endpoint and shouldn't be hitting it.
-          const familyUuid = session?.uuid
+          const familyUuid = session?.familyUUID
           if (familyUuid) {
             const myEnrollments: BeneficiaryWithProgramme[] = await getSubjectEnrollments(familyUuid)
             programmes = myEnrollments.map(e => e.programme)
@@ -296,7 +296,7 @@ export default function CommonProgramme({ mode: modeProp }: CommonProgrammeProps
 
     load()
     return () => { cancelled = true }
-  }, [mode, programmeId, session?.uuid]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mode, programmeId, session?.familyUUID]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Filter ─────────────────────────────────────────────────────────────────
   const filtered = useMemo(() => rows.filter(({ programme: p }) => {
